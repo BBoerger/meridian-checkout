@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meridian Management — Device Checkout</title>
+
+  <!-- Microsoft Authentication Library -->
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --brand:       #1a3a5c;
+      --brand-light: #2a5a8c;
+      --accent:      #e8a020;
+      --bg:          #f0f4f8;
+      --surface:     #ffffff;
+      --border:      #d0dae6;
+      --text:        #1e2b3a;
+      --muted:       #6b7c93;
+      --green:       #22c55e;
+      --green-bg:    #dcfce7;
+      --red:         #ef4444;
+      --red-bg:      #fee2e2;
+      --shadow:      0 2px 12px rgba(26,58,92,.10);
+      --radius:      10px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+
+    /* ── Full-screen overlays ── */
+    .screen {
+      position: fixed; inset: 0; z-index: 500;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 18px; padding: 24px; text-align: center;
+    }
+    #signin-screen { background: var(--brand); color: #fff; }
+    #loading-screen { background: var(--brand); color: #fff; }
+
+    .screen-logo {
+      width: 64px; height: 64px; background: var(--accent);
+      border-radius: 16px; display: flex; align-items: center;
+      justify-content: center; font-size: 32px; font-weight: 900; color: var(--brand);
+      margin-bottom: 4px;
+    }
+    .screen h2 { font-size: 22px; font-weight: 800; }
+    .screen p  { font-size: 14px; opacity: .7; max-width: 320px; line-height: 1.5; }
+    .screen .sub { font-size: 12px; opacity: .5; }
+
+    /* Microsoft sign-in button */
+    .ms-btn {
+      display: flex; align-items: center; gap: 12px;
+      background: #fff; color: #1a1a1a;
+      border: none; border-radius: 4px;
+      padding: 12px 20px; font-size: 15px; font-weight: 600;
+      cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+      transition: box-shadow .15s; margin-top: 8px;
+    }
+    .ms-btn:hover { box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+    .ms-btn svg { flex-shrink: 0; }
+
+    .spinner {
+      width: 36px; height: 36px; border: 3px solid rgba(255,255,255,.25);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-msg { font-size: 13px; opacity: .6; }
+
+    /* ── Header ── */
+    header {
+      background: var(--brand); color: #fff;
+      padding: 0 32px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      width: 38px; height: 38px; background: var(--accent);
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 20px; font-weight: 900; color: var(--brand);
+    }
+    .logo h1 { font-size: 17px; font-weight: 700; }
+    .logo p  { font-size: 11px; opacity: .7; }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .header-meta  { font-size: 12px; opacity: .7; text-align: right; }
+    #live-clock   { font-size: 14px; font-weight: 600; opacity: 1; }
+    .user-chip {
+      background: rgba(255,255,255,.12); border-radius: 20px;
+      padding: 5px 12px 5px 8px; display: flex; align-items: center; gap: 7px;
+      font-size: 12px; font-weight: 600; cursor: pointer; border: none; color: #fff;
+      transition: background .15s;
+    }
+    .user-chip:hover { background: rgba(255,255,255,.22); }
+    .user-avatar {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--accent); color: var(--brand);
+      font-size: 11px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Refresh bar ── */
+    #refresh-bar {
+      background: #e8f4fd; border-bottom: 1px solid #bee3f8;
+      padding: 6px 32px; display: flex; align-items: center;
+      justify-content: space-between; font-size: 12px; color: #2a6496;
+    }
+    #refresh-bar button {
+      background: none; border: 1px solid #2a6496; border-radius: 5px;
+      padding: 3px 10px; font-size: 11px; font-weight: 700;
+      color: #2a6496; cursor: pointer;
+    }
+    #refresh-bar button:hover { background: #2a6496; color: #fff; }
+
+    /* ── Nav Tabs ── */
+    nav {
+      background: var(--brand-light);
+      display: flex; gap: 2px; padding: 0 32px;
+    }
+    nav button {
+      background: transparent; border: none; color: rgba(255,255,255,.7);
+      padding: 10px 20px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border-bottom: 3px solid transparent;
+      transition: all .2s;
+    }
+    nav button.active, nav button:hover { color: #fff; border-bottom-color: var(--accent); }
+
+    /* ── Main ── */
+    main { padding: 28px 32px; max-width: 1280px; margin: 0 auto; }
+
+    /* ── Summary Cards ── */
+    .summary-bar {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 16px 20px; box-shadow: var(--shadow);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .stat-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+    .stat-card .value { font-size: 28px; font-weight: 800; line-height: 1; }
+    .stat-card .sub   { font-size: 12px; color: var(--muted); }
+    .stat-card.available .value  { color: var(--green); }
+    .stat-card.checked-out .value{ color: var(--red); }
+    .stat-card.total .value      { color: var(--brand); }
+
+    /* ── Equipment ── */
+    .category-block { margin-bottom: 32px; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-header h2 {
+      font-size: 15px; font-weight: 700; color: var(--brand);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .equipment-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;
+    }
+    .device-card {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); border: 2px solid var(--border);
+      overflow: hidden; transition: transform .15s, box-shadow .15s;
+    }
+    .device-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(26,58,92,.13); }
+    .device-card.out { border-color: #fca5a5; }
+    .device-card.in  { border-color: #86efac; }
+    .device-card-top {
+      padding: 14px 16px 10px;
+      display: flex; align-items: flex-start; justify-content: space-between;
+    }
+    .device-name { font-size: 14px; font-weight: 700; }
+    .device-type { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .status-pill {
+      font-size: 10px; font-weight: 700; padding: 3px 9px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+    }
+    .status-pill.available { background: var(--green-bg); color: #16a34a; }
+    .status-pill.out       { background: var(--red-bg);   color: #dc2626; }
+    .device-info {
+      padding: 0 16px 10px; font-size: 12px; color: var(--muted);
+      line-height: 1.6; min-height: 44px;
+    }
+    .device-info .info-row { display: flex; gap: 6px; }
+    .device-info .info-label { font-weight: 600; color: var(--text); min-width: 56px; }
+    .device-card-actions { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+    .btn {
+      flex: 1; padding: 8px 12px; border: none; border-radius: 7px;
+      font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s;
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-checkout { background: var(--brand); color: #fff; }
+    .btn-checkout:hover:not(:disabled) { background: var(--brand-light); }
+    .btn-checkin  { background: var(--green); color: #fff; }
+    .btn-checkin:hover:not(:disabled)  { background: #16a34a; }
+
+    /* ── Log Tab ── */
+    .log-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+    .log-toolbar input, .log-toolbar select {
+      padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px;
+      font-size: 13px; color: var(--text); background: var(--surface); outline: none;
+    }
+    .log-toolbar input:focus, .log-toolbar select:focus { border-color: var(--brand-light); }
+    .btn-danger {
+      background: var(--red); color: #fff; padding: 8px 16px; border: none;
+      border-radius: 7px; font-weight: 700; cursor: pointer; font-size: 12px;
+    }
+    .btn-danger:hover { background: #dc2626; }
+    .log-table-wrap { overflow-x: auto; border-radius: var(--radius); box-shadow: var(--shadow); }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: 13px; }
+    thead th {
+      background: var(--brand); color: #fff; padding: 11px 14px;
+      text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    tbody td { padding: 10px 14px; vertical-align: middle; }
+    .log-event { font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 12px; }
+    .log-event.out { background: var(--red-bg); color: var(--red); }
+    .log-event.in  { background: var(--green-bg); color: #16a34a; }
+    .empty-state { padding: 48px; text-align: center; color: var(--muted); font-size: 14px; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 14px; padding: 32px;
+      width: 420px; max-width: calc(100vw - 40px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      animation: pop .2s ease;
+    }
+    @keyframes pop { from { transform: scale(.92); opacity:0; } to { transform: scale(1); opacity:1; } }
+    .modal h3 { font-size: 18px; font-weight: 800; color: var(--brand); margin-bottom: 6px; }
+    .modal-device { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+    .form-group input {
+      width: 100%; padding: 10px 13px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 14px; color: var(--text); outline: none; transition: border-color .15s;
+    }
+    .form-group input:focus { border-color: var(--brand-light); box-shadow: 0 0 0 3px rgba(42,90,140,.12); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+    .btn-confirm {
+      flex: 1; padding: 11px; font-size: 14px; font-weight: 700;
+      border: none; border-radius: 8px; cursor: pointer;
+      background: var(--brand); color: #fff;
+    }
+    .btn-confirm:hover { background: var(--brand-light); }
+    .btn-confirm.green { background: var(--green); }
+    .btn-confirm.green:hover { background: #16a34a; }
+    .btn-confirm.danger { background: var(--red); }
+    .btn-cancel {
+      flex: 1; padding: 11px; font-size: 14px; font-weight: 700;
+      background: var(--bg); color: var(--muted);
+      border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+    }
+    .btn-cancel:hover { background: var(--border); color: var(--text); }
+    .confirm-msg { font-size: 14px; color: var(--text); margin-bottom: 20px; line-height: 1.6; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 28px; right: 28px; z-index: 600;
+      background: var(--brand); color: #fff;
+      padding: 13px 22px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+      transform: translateY(80px); opacity: 0; transition: all .3s ease;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { background: #16a34a; }
+    #toast.error   { background: var(--red); }
+    #toast.info    { background: var(--brand-light); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      main { padding: 16px; }
+      header { padding: 0 14px; }
+      nav { padding: 0 14px; }
+      #refresh-bar { padding: 6px 14px; }
+      .summary-bar { grid-template-columns: 1fr 1fr; }
+      .logo p { display: none; }
+      #live-clock { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ SIGN-IN SCREEN ═══════════════ -->
+<div class="screen" id="signin-screen">
+  <div class="screen-logo">M</div>
+  <h2>Meridian Management</h2>
+  <p>Device Checkout System</p>
+  <p style="opacity:.55;font-size:13px">Sign in with your Meridian Microsoft account to continue</p>
+  <button class="ms-btn" onclick="signIn()">
+    <!-- Microsoft logo -->
+    <svg width="21" height="21" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+    </svg>
+    Sign in with Microsoft
+  </button>
+  <p class="sub" style="margin-top:4px">Use your @meridianak.com account</p>
+</div>
+
+<!-- ═══════════════ LOADING SCREEN ═══════════════ -->
+<div class="screen" id="loading-screen" style="display:none;">
+  <div class="screen-logo">M</div>
+  <div class="spinner"></div>
+  <p id="loading-msg">Loading inventory…</p>
+</div>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">M</div>
+    <div>
+      <h1>Meridian Management</h1>
+      <p>Device Checkout System</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-meta">
+      <div id="live-clock"></div>
+      <div id="header-date"></div>
+    </div>
+    <button class="user-chip" onclick="signOut()" title="Click to sign out">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <span id="user-name">Loading…</span>
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════════ REFRESH BAR ═══════════════ -->
+<div id="refresh-bar">
+  <span>Last updated: <strong id="last-updated">—</strong> &nbsp;·&nbsp; Auto-refreshes every 30 seconds</span>
+  <button onclick="refreshData()">↻ Refresh Now</button>
+</div>
+
+<!-- ═══════════════ NAV ═══════════════ -->
+<nav>
+  <button class="active" onclick="showTab('inventory')">📦 Inventory</button>
+  <button onclick="showTab('log')">📋 Checkout Log</button>
+</nav>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main>
+  <div id="tab-inventory">
+    <div class="summary-bar" id="summary-bar"></div>
+    <div id="equipment-sections"></div>
+  </div>
+
+  <div id="tab-log" style="display:none;">
+    <div class="log-toolbar">
+      <input type="text" id="log-search" placeholder="🔍  Search employee or device…" style="flex:1;min-width:180px;" oninput="renderLog()">
+      <select id="log-filter" onchange="renderLog()">
+        <option value="">All Events</option>
+        <option value="out">Checked Out</option>
+        <option value="in">Checked In</option>
+      </select>
+      <button class="btn-danger" onclick="confirmClearLog()">🗑 Clear Log</button>
+    </div>
+    <div class="log-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date &amp; Time</th>
+            <th>Event</th>
+            <th>Device</th>
+            <th>Employee</th>
+            <th>Project / Job Site</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+<div class="modal-overlay" id="checkout-modal">
+  <div class="modal">
+    <h3>Check Out Device</h3>
+    <div class="modal-device" id="checkout-modal-device"></div>
+    <div class="form-group">
+      <label>Employee Name *</label>
+      <input type="text" id="checkout-name" placeholder="e.g. John Smith" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label>Project / Job Site *</label>
+      <input type="text" id="checkout-project" placeholder="e.g. Downtown Office Build" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('checkout-modal')">Cancel</button>
+      <button class="btn-confirm" id="checkout-confirm-btn" onclick="confirmCheckout()">✓ Confirm Checkout</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="checkin-modal">
+  <div class="modal">
+    <h3>Check In Device</h3>
+    <p class="confirm-msg" id="checkin-modal-msg"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('checkin-modal')">Cancel</button>
+      <button class="btn-confirm green" id="checkin-confirm-btn" onclick="confirmCheckin()">✓ Confirm Check In</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="clearlog-modal">
+  <div class="modal">
+    <h3>Clear Checkout Log?</h3>
+    <p class="confirm-msg">This permanently deletes all checkout history and cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('clearlog-modal')">Cancel</button>
+      <button class="btn-confirm danger" onclick="clearLog()">🗑 Yes, Clear Log</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ═══════════════ SCRIPT ═══════════════ -->
+<script>
+// ════════════════════════════════════════════════════════════
+//  STEP 1: After Azure app registration, paste your Client ID
+// ════════════════════════════════════════════════════════════
+const CONFIG = {
+  clientId:          "ff1fd3ee-7baf-4d72-b978-742a29de8eab",
+  tenantId:          "4fa4840a-2a70-49e0-93ab-fd8b099bbeed",
+  siteHostname:      "meridianak.sharepoint.com",
+  checkoutsListName: "DeviceCheckouts",
+  logListName:       "CheckoutLog",
+  pollInterval:      30000   // ms — how often to auto-refresh
+};
+// ════════════════════════════════════════════════════════════
+
+// ── Inventory ────────────────────────────────────────────────
+const CATEGORIES = [
+  {
+    id: 'starlinks', name: 'Starlinks', icon: '📡',
+    devices: [
+      { id: 'sl-1', name: 'Standard Starlink #1', type: 'Standard' },
+      { id: 'sl-2', name: 'Starlink #2',          type: 'Standard' },
+      { id: 'sl-3', name: 'Starlink #3',          type: 'Standard' },
+      { id: 'sl-4', name: 'Mini Starlink #4',     type: 'Mini'     },
+      { id: 'sl-5', name: 'Mini Starlink #5',     type: 'Mini'     },
+      { id: 'sl-6', name: 'Mini Starlink #6',     type: 'Mini'     },
+      { id: 'sl-7', name: 'Starlink #7',          type: 'Standard' },
+    ]
+  },
+  {
+    id: 'drones', name: 'DJI Drones', icon: '🚁',
+    devices: [
+      { id: 'dj-1', name: 'Drone #1', type: 'DJI' },
+      { id: 'dj-2', name: 'Drone #2', type: 'DJI' },
+      { id: 'dj-3', name: 'Drone #3', type: 'DJI' },
+      { id: 'dj-4', name: 'Drone #4', type: 'DJI' },
+    ]
+  },
+  {
+    id: 'gopros', name: 'GoPros', icon: '🎥',
+    devices: [
+      { id: 'gp-1', name: 'GoPro #1', type: 'GoPro' },
+      { id: 'gp-2', name: 'GoPro #2', type: 'GoPro' },
+      { id: 'gp-3', name: 'GoPro #3', type: 'GoPro' },
+    ]
+  }
+];
+const ALL_DEVICES = CATEGORIES.flatMap(c => c.devices.map(d => ({ ...d, category: c.name })));
+
+// ── State ─────────────────────────────────────────────────────
+let msalInstance = null;
+let siteId       = null;
+let checkouts    = {};   // { deviceId: { employee, project, timestamp, itemId } }
+let logEntries   = [];   // [{ ts, event, deviceId, deviceName, category, employee, project, itemId }]
+let activeDeviceId = null;
+let pollTimer      = null;
+let isSaving       = false;
+
+// ── MSAL Init ─────────────────────────────────────────────────
+const msalConfig = {
+  auth: {
+    clientId:    CONFIG.clientId,
+    authority:   `https://login.microsoftonline.com/${CONFIG.tenantId}`,
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: true }
+};
+
+const graphScopes = ['https://graph.microsoft.com/Sites.ReadWrite.All'];
+
+async function initMsal() {
+  try {
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    showLoading('Checking authentication…');
+
+    const response = await msalInstance.handleRedirectPromise();
+    if (response) {
+      msalInstance.setActiveAccount(response.account);
+      await startApp();
+    } else {
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) {
+        msalInstance.setActiveAccount(accounts[0]);
+        await startApp();
+      } else {
+        showSignIn();
+      }
+    }
+  } catch (e) {
+    console.error('MSAL init error:', e);
+    showSignIn();
+  }
+}
+
+function signIn() {
+  msalInstance.loginRedirect({ scopes: graphScopes });
+}
+
+function signOut() {
+  if (!confirm('Sign out of Device Checkout?')) return;
+  clearInterval(pollTimer);
+  msalInstance.logoutRedirect({ postLogoutRedirectUri: window.location.href });
+}
+
+async function getToken() {
+  const account = msalInstance.getActiveAccount();
+  try {
+    const res = await msalInstance.acquireTokenSilent({ scopes: graphScopes, account });
+    return res.accessToken;
+  } catch (e) {
+    if (e instanceof msal.InteractionRequiredAuthError) {
+      msalInstance.acquireTokenRedirect({ scopes: graphScopes, account });
+    }
+    throw e;
+  }
+}
+
+// ── Graph API helper ──────────────────────────────────────────
+async function graph(path, options = {}) {
+  const token = await getToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  if (res.status === 204) return null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Graph API error ${res.status}`);
+  return data;
+}
+
+// ── App Start ─────────────────────────────────────────────────
+async function startApp() {
+  const account = msalInstance.getActiveAccount();
+  showLoading('Connecting to SharePoint…');
+
+  // Set user chip
+  const name = account.name || account.username.split('@')[0];
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
+
+  try {
+    // Get SharePoint site ID
+    const site = await graph(`/sites/${CONFIG.siteHostname}`);
+    siteId = site.id;
+
+    showLoading('Loading inventory…');
+    await refreshData();
+
+    hideScreens();
+    startPolling();
+  } catch (e) {
+    console.error('App start error:', e);
+    showLoading('⚠ Error loading data. Check setup guide.\n' + e.message);
+  }
+}
+
+// ── Data Operations ───────────────────────────────────────────
+async function refreshData() {
+  try {
+    // Load checkouts
+    const coRes = await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.checkoutsListName)}/items?$expand=fields&$top=100`
+    );
+    checkouts = {};
+    for (const item of (coRes.value || [])) {
+      const f = item.fields;
+      checkouts[f.Title] = {
+        employee:  f.Employee  || '',
+        project:   f.Project   || '',
+        timestamp: f.CheckoutTimestamp || 0,
+        category:  f.Category  || '',
+        deviceName:f.DeviceName|| '',
+        itemId:    item.id
+      };
+    }
+
+    // Load log
+    const logRes = await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items?$expand=fields&$top=500`
+    );
+    logEntries = (logRes.value || []).map(item => {
+      const f = item.fields;
+      return {
+        ts:         f.EventTimestamp || 0,
+        event:      f.Title || '',
+        deviceId:   f.DeviceId   || '',
+        deviceName: f.DeviceName || '',
+        category:   f.Category   || '',
+        employee:   f.Employee   || '',
+        project:    f.Project    || '',
+        itemId:     item.id
+      };
+    }).sort((a, b) => a.ts - b.ts);
+
+    render();
+    if (document.getElementById('tab-log').style.display === 'block') renderLog();
+
+    document.getElementById('last-updated').textContent =
+      new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  } catch (e) {
+    console.error('Refresh error:', e);
+    toast('Could not refresh data — check your connection', 'error');
+  }
+}
+
+async function doCheckout(deviceId, deviceName, category, employee, project) {
+  const ts = Date.now();
+  // Add to DeviceCheckouts list
+  await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.checkoutsListName)}/items`, {
+    method: 'POST',
+    body: JSON.stringify({ fields: {
+      Title:             deviceId,
+      DeviceName:        deviceName,
+      Category:          category,
+      Employee:          employee,
+      Project:           project,
+      CheckoutTimestamp: ts
+    }})
+  });
+  // Log the event
+  await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
+    method: 'POST',
+    body: JSON.stringify({ fields: {
+      Title:          'out',
+      DeviceId:       deviceId,
+      DeviceName:     deviceName,
+      Category:       category,
+      Employee:       employee,
+      Project:        project,
+      EventTimestamp: ts
+    }})
+  });
+}
+
+async function doCheckin(deviceId) {
+  const co = checkouts[deviceId];
+  if (!co) return;
+  // Remove from DeviceCheckouts list
+  await graph(
+    `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.checkoutsListName)}/items/${co.itemId}`,
+    { method: 'DELETE' }
+  );
+  // Log the event
+  await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
+    method: 'POST',
+    body: JSON.stringify({ fields: {
+      Title:          'in',
+      DeviceId:       deviceId,
+      DeviceName:     co.deviceName,
+      Category:       co.category,
+      Employee:       co.employee,
+      Project:        co.project,
+      EventTimestamp: Date.now()
+    }})
+  });
+}
+
+async function doDeleteAllLog() {
+  const ids = logEntries.map(e => e.itemId).filter(Boolean);
+  // Delete in batches of 20 using Graph batch API
+  for (let i = 0; i < ids.length; i += 20) {
+    const batch = ids.slice(i, i + 20).map((id, idx) => ({
+      id: String(idx + 1),
+      method: 'DELETE',
+      url: `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items/${id}`
+    }));
+    await graph('/$batch', {
+      method: 'POST',
+      body: JSON.stringify({ requests: batch })
+    });
+  }
+}
+
+// ── UI Rendering ──────────────────────────────────────────────
+function render() {
+  renderSummary();
+  renderEquipment();
+}
+
+function renderSummary() {
+  const total = ALL_DEVICES.length;
+  const out   = Object.keys(checkouts).length;
+  document.getElementById('summary-bar').innerHTML = `
+    <div class="stat-card total">
+      <span class="label">Total Devices</span>
+      <span class="value">${total}</span><span class="sub">in inventory</span>
+    </div>
+    <div class="stat-card available">
+      <span class="label">Available</span>
+      <span class="value">${total - out}</span><span class="sub">ready to check out</span>
+    </div>
+    <div class="stat-card checked-out">
+      <span class="label">Checked Out</span>
+      <span class="value">${out}</span><span class="sub">currently in use</span>
+    </div>
+    <div class="stat-card" style="border-left:4px solid var(--accent)">
+      <span class="label">Log Entries</span>
+      <span class="value" style="color:var(--accent)">${logEntries.length}</span>
+      <span class="sub">total transactions</span>
+    </div>`;
+}
+
+function renderEquipment() {
+  document.getElementById('equipment-sections').innerHTML = CATEGORIES.map(cat => `
+    <div class="category-block">
+      <div class="section-header">
+        <h2><span>${cat.icon}</span>${cat.name}</h2>
+        <span style="font-size:12px;color:var(--muted)">
+          ${cat.devices.filter(d => !checkouts[d.id]).length} / ${cat.devices.length} available
+        </span>
+      </div>
+      <div class="equipment-grid">${cat.devices.map(deviceCard).join('')}</div>
+    </div>`).join('');
+}
+
+function deviceCard(d) {
+  const co    = checkouts[d.id];
+  const isOut = !!co;
+  return `
+    <div class="device-card ${isOut ? 'out' : 'in'}">
+      <div class="device-card-top">
+        <div>
+          <div class="device-name">${d.name}</div>
+          <div class="device-type">${d.type}</div>
+        </div>
+        <span class="status-pill ${isOut ? 'out' : 'available'}">${isOut ? 'Checked Out' : 'Available'}</span>
+      </div>
+      <div class="device-info">
+        ${isOut ? `
+          <div class="info-row"><span class="info-label">Employee:</span>${escHtml(co.employee)}</div>
+          <div class="info-row"><span class="info-label">Project:</span>${escHtml(co.project)}</div>
+          <div class="info-row"><span class="info-label">Since:</span>${formatTime(co.timestamp)}</div>
+        ` : '<span style="color:var(--green);font-weight:600;">Ready for checkout</span>'}
+      </div>
+      <div class="device-card-actions">
+        ${isOut
+          ? `<button class="btn btn-checkin"  onclick="openCheckin('${d.id}')">↩ Check In</button>`
+          : `<button class="btn btn-checkout" onclick="openCheckout('${d.id}')">↗ Check Out</button>`}
+      </div>
+    </div>`;
+}
+
+function renderLog() {
+  const search = (document.getElementById('log-search').value || '').toLowerCase();
+  const filter = document.getElementById('log-filter').value;
+  const rows = [...logEntries].reverse().filter(e => {
+    if (filter && e.event !== filter) return false;
+    if (search && !`${e.deviceName} ${e.employee} ${e.project}`.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const tbody = document.getElementById('log-body');
+  tbody.innerHTML = rows.length ? rows.map(e => `
+    <tr>
+      <td>${formatDateTime(e.ts)}</td>
+      <td><span class="log-event ${e.event}">${e.event === 'out' ? '↗ Checked Out' : '↩ Checked In'}</span></td>
+      <td><strong>${escHtml(e.deviceName)}</strong><br>
+          <span style="color:var(--muted);font-size:11px">${escHtml(e.category)}</span></td>
+      <td>${escHtml(e.employee)}</td>
+      <td>${escHtml(e.project || '—')}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="5" class="empty-state">No log entries found.</td></tr>`;
+}
+
+// ── Modal Actions ─────────────────────────────────────────────
+function openCheckout(deviceId) {
+  activeDeviceId = deviceId;
+  const d = ALL_DEVICES.find(x => x.id === deviceId);
+  document.getElementById('checkout-modal-device').textContent = `${d.category} › ${d.name}`;
+  document.getElementById('checkout-name').value    = '';
+  document.getElementById('checkout-project').value = '';
+  openModal('checkout-modal');
+  setTimeout(() => document.getElementById('checkout-name').focus(), 60);
+}
+
+async function confirmCheckout() {
+  const name    = document.getElementById('checkout-name').value.trim();
+  const project = document.getElementById('checkout-project').value.trim();
+  if (!name)    { shakeInput('checkout-name');    return; }
+  if (!project) { shakeInput('checkout-project'); return; }
+  if (isSaving) return;
+
+  const d = ALL_DEVICES.find(x => x.id === activeDeviceId);
+  setBtnLoading('checkout-confirm-btn', true);
+  isSaving = true;
+  try {
+    await doCheckout(activeDeviceId, d.name, d.category, name, project);
+    closeModal('checkout-modal');
+    toast(`${d.name} checked out to ${name}`, 'success');
+    await refreshData();
+  } catch (e) {
+    toast('Error saving checkout: ' + e.message, 'error');
+  } finally {
+    setBtnLoading('checkout-confirm-btn', false);
+    isSaving = false;
+  }
+}
+
+function openCheckin(deviceId) {
+  activeDeviceId = deviceId;
+  const d  = ALL_DEVICES.find(x => x.id === deviceId);
+  const co = checkouts[deviceId];
+  document.getElementById('checkin-modal-msg').innerHTML =
+    `Return <strong>${escHtml(d.name)}</strong> from <strong>${escHtml(co.employee)}</strong>?<br>
+     <span style="color:var(--muted);font-size:12px">Project: ${escHtml(co.project)}</span>`;
+  openModal('checkin-modal');
+}
+
+async function confirmCheckin() {
+  if (isSaving) return;
+  const d = ALL_DEVICES.find(x => x.id === activeDeviceId);
+  setBtnLoading('checkin-confirm-btn', true);
+  isSaving = true;
+  try {
+    await doCheckin(activeDeviceId);
+    closeModal('checkin-modal');
+    toast(`${d.name} checked back in`, 'success');
+    await refreshData();
+  } catch (e) {
+    toast('Error checking in: ' + e.message, 'error');
+  } finally {
+    setBtnLoading('checkin-confirm-btn', false);
+    isSaving = false;
+  }
+}
+
+function confirmClearLog() { openModal('clearlog-modal'); }
+async function clearLog() {
+  closeModal('clearlog-modal');
+  toast('Clearing log…', 'info');
+  try {
+    await doDeleteAllLog();
+    await refreshData();
+    toast('Checkout log cleared', 'error');
+  } catch (e) {
+    toast('Error clearing log: ' + e.message, 'error');
+  }
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el =>
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); })
+);
+
+// ── Tab ───────────────────────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('tab-inventory').style.display = tab === 'inventory' ? 'block' : 'none';
+  document.getElementById('tab-log').style.display       = tab === 'log'       ? 'block' : 'none';
+  document.querySelectorAll('nav button').forEach((b, i) =>
+    b.classList.toggle('active', (tab === 'inventory' && i === 0) || (tab === 'log' && i === 1))
+  );
+  if (tab === 'log') renderLog();
+}
+
+// ── Polling ───────────────────────────────────────────────────
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(refreshData, CONFIG.pollInterval);
+}
+
+// ── Screen helpers ────────────────────────────────────────────
+function showSignIn()  {
+  document.getElementById('signin-screen').style.display  = 'flex';
+  document.getElementById('loading-screen').style.display = 'none';
+}
+function showLoading(msg) {
+  document.getElementById('signin-screen').style.display  = 'none';
+  document.getElementById('loading-screen').style.display = 'flex';
+  document.getElementById('loading-msg').textContent = msg;
+}
+function hideScreens() {
+  document.getElementById('signin-screen').style.display  = 'none';
+  document.getElementById('loading-screen').style.display = 'none';
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function formatTime(ts) {
+  return new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+function formatDateTime(ts) {
+  return new Date(ts).toLocaleDateString('en-US', {
+    month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true
+  });
+}
+function shakeInput(id) {
+  const el = document.getElementById(id);
+  el.style.borderColor = 'var(--red)'; el.focus();
+  setTimeout(() => el.style.borderColor = '', 1500);
+}
+function setBtnLoading(id, loading) {
+  const btn = document.getElementById(id);
+  btn.disabled    = loading;
+  btn.textContent = loading ? '…saving' : (id.includes('checkout') ? '✓ Confirm Checkout' : '✓ Confirm Check In');
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3500);
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('live-clock').textContent =
+    now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', second:'2-digit' });
+  document.getElementById('header-date').textContent =
+    now.toLocaleDateString('en-US', { weekday:'short', month:'long', day:'numeric' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(el => el.classList.remove('open'));
+  if (e.key === 'Enter' && document.getElementById('checkout-modal').classList.contains('open')) confirmCheckout();
+});
+
+// ── Boot ──────────────────────────────────────────────────────
+initMsal();
+</script>
+</body>
+</html>
