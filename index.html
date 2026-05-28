@@ -199,6 +199,8 @@
     .btn-checkout:hover:not(:disabled) { background: var(--brand-light); }
     .btn-checkin  { background: var(--green); color: #fff; }
     .btn-checkin:hover:not(:disabled)  { background: #16a34a; }
+    .btn-reserve  { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
+    .btn-reserve:hover:not(:disabled)  { background: var(--accent); color: #fff; }
 
     /* ── Log Tab ── */
     .log-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
@@ -281,6 +283,64 @@
     #toast.success { background: #16a34a; }
     #toast.error   { background: var(--red); }
     #toast.info    { background: var(--brand-light); }
+
+    /* ── Reservations & Available Tab ── */
+    .res-toolbar { display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+    .res-table-wrap { overflow-x:auto; border-radius:var(--radius); box-shadow:var(--shadow); }
+    .res-section-label {
+      font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+      color:var(--muted); margin:22px 0 10px;
+    }
+    .res-card {
+      background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow);
+      padding:16px 20px; margin-bottom:10px; display:flex; align-items:center; gap:16px;
+    }
+    .res-card-dates {
+      min-width:110px; text-align:center; background:var(--bg);
+      border-radius:8px; padding:8px 10px;
+    }
+    .res-date-range { font-size:12px; font-weight:700; color:var(--brand); }
+    .res-date-sub   { font-size:10px; color:var(--muted); margin-top:2px; }
+    .res-card-info  { flex:1; }
+    .res-card-device { font-weight:800; font-size:15px; }
+    .res-card-meta   { font-size:12px; color:var(--muted); margin-top:3px; }
+    .res-active-pill {
+      font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px;
+      background:#fef3c7; color:#92400e; margin-left:6px;
+    }
+    .btn-cancel-res {
+      padding:6px 14px; border-radius:6px; font-size:12px; font-weight:700;
+      border:1px solid #fca5a5; background:var(--red-bg); color:var(--red);
+      cursor:pointer; white-space:nowrap;
+    }
+    .btn-cancel-res:hover { background:var(--red); color:#fff; border-color:var(--red); }
+    .device-reservation-badge {
+      font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px;
+      background:#fef3c7; color:#92400e; margin-top:4px; display:inline-block;
+    }
+    .btn-reserve {
+      flex:1; padding:9px; font-size:13px; font-weight:700;
+      border:2px solid var(--accent); background:transparent; color:var(--accent);
+      border-radius:8px; cursor:pointer;
+    }
+    .btn-reserve:hover { background:var(--accent); color:#fff; }
+    .avail-grid { display:grid; gap:8px; }
+    .avail-row {
+      background:var(--surface); border-radius:var(--radius); padding:14px 18px;
+      display:flex; align-items:center; gap:12px; box-shadow:var(--shadow);
+    }
+    .avail-row-info { flex:1; }
+    .avail-row-name { font-weight:700; font-size:14px; }
+    .avail-row-cat  { font-size:11px; color:var(--muted); margin-top:2px; }
+    .avail-upcoming { font-size:10px; font-weight:700; color:#92400e; margin-top:3px; }
+    .avail-cat-header {
+      font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+      color:var(--muted); margin:18px 0 8px; padding-left:4px;
+    }
+    .overdue-pill {
+      font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px;
+      background:var(--red-bg); color:var(--red); margin-left:6px;
+    }
 
     /* ── Manage Tab ── */
     .manage-toolbar {
@@ -402,6 +462,7 @@
 <!-- ═══════════════ NAV ═══════════════ -->
 <nav>
   <button class="active" onclick="showTab('inventory')">📦 Inventory</button>
+  <button onclick="showTab('reservations')">📅 Reservations</button>
   <button onclick="showTab('log')">📋 Checkout Log</button>
   <button onclick="showTab('manage')">⚙️ Manage Devices</button>
 </nav>
@@ -411,6 +472,14 @@
   <div id="tab-inventory">
     <div class="summary-bar" id="summary-bar"></div>
     <div id="equipment-sections"></div>
+  </div>
+
+  <div id="tab-reservations" style="display:none;">
+    <div class="res-toolbar">
+      <h2 style="font-size:18px;font-weight:800;color:var(--brand);flex:1">Reservations</h2>
+      <button class="btn-add-device" onclick="openReserve(null)">+ New Reservation</button>
+    </div>
+    <div id="reservations-content"></div>
   </div>
 
   <div id="tab-manage" style="display:none;">
@@ -461,9 +530,56 @@
       <label>Project / Job Site *</label>
       <input type="text" id="checkout-project" placeholder="e.g. Downtown Office Build" autocomplete="off" />
     </div>
+    <div class="form-group">
+      <label>Expected Return Date *</label>
+      <input type="date" id="checkout-return" />
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('checkout-modal')">Cancel</button>
       <button class="btn-confirm" id="checkout-confirm-btn" onclick="confirmCheckout()">✓ Confirm Checkout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reserve Modal -->
+<div class="modal-overlay" id="reserve-modal">
+  <div class="modal">
+    <h3>Reserve Device</h3>
+    <div class="modal-device" id="reserve-modal-device"></div>
+    <div class="form-group">
+      <label>Employee Name *</label>
+      <input type="text" id="reserve-name" placeholder="e.g. John Smith" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label>Project / Job Site *</label>
+      <input type="text" id="reserve-project" placeholder="e.g. Downtown Office Build" autocomplete="off" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="margin-bottom:0">
+        <label>Start Date *</label>
+        <input type="date" id="reserve-start" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>End Date *</label>
+        <input type="date" id="reserve-end" />
+      </div>
+    </div>
+    <div id="reserve-conflict-msg" style="display:none;margin-top:12px;padding:10px 13px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:13px;font-weight:600;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('reserve-modal')">Cancel</button>
+      <button class="btn-confirm" id="reserve-confirm-btn" onclick="confirmReserve()">📅 Confirm Reservation</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cancel Reservation Modal -->
+<div class="modal-overlay" id="cancel-res-modal">
+  <div class="modal">
+    <h3>Cancel Reservation?</h3>
+    <p class="confirm-msg" id="cancel-res-msg"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('cancel-res-modal')">Keep It</button>
+      <button class="btn-confirm danger" id="cancel-res-confirm-btn" onclick="confirmCancelReservation()">Yes, Cancel It</button>
     </div>
   </div>
 </div>
@@ -539,6 +655,8 @@ const CONFIG = {
   checkoutsListName:       "DeviceCheckouts",
   logListName:             "CheckoutLog",
   deviceInventoryListName: "DeviceInventory",
+  reservationsListName:    "DeviceReservations",
+  availableListName:       "AvailableDevices",
   pollInterval:            30000
 };
 // ════════════════════════════════════════════════════════════
@@ -573,11 +691,14 @@ let msalInstance = null;
 let siteId       = null;
 let checkouts    = {};
 let logEntries   = [];
-let activeDeviceId          = null;
+let reservations      = [];
+let availableItemIds  = {};  // { deviceId: sharePointItemId } for AvailableDevices list
+let activeDeviceId    = null;
 let pollTimer               = null;
 let isSaving                = false;
-let editingDeviceItemId     = null;  // SharePoint itemId of device being edited
-let activeDeleteItemId      = null;  // SharePoint itemId of device being deleted
+let editingDeviceItemId     = null;
+let activeDeleteItemId      = null;
+let activeReservationItemId = null;
 
 // ── MSAL Init ─────────────────────────────────────────────────
 const msalConfig = {
@@ -677,6 +798,7 @@ async function startApp() {
     await refreshData();
 
     hideScreens();
+    if (window._initialTab) { showTab(window._initialTab); window._initialTab = null; }
     startPolling();
   } catch (e) {
     console.error('App start error:', e);
@@ -695,13 +817,39 @@ async function refreshData() {
     for (const item of (coRes.value || [])) {
       const f = item.fields;
       checkouts[f.Title] = {
-        employee:  f.Employee  || '',
-        project:   f.Project   || '',
-        timestamp: f.CheckoutTimestamp || 0,
-        category:  f.Category  || '',
-        deviceName:f.DeviceName|| '',
-        itemId:    item.id
+        employee:       f.Employee   || '',
+        project:        f.Project    || '',
+        timestamp:      f.CheckoutTimestamp || 0,
+        category:       f.Category   || '',
+        deviceName:     f.DeviceName || '',
+        expectedReturn: f.ExpectedReturn || '',
+        itemId:         item.id
       };
+    }
+
+    // Load reservations
+    try {
+      const resRes = await graph(
+        `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.reservationsListName)}/items?$expand=fields&$top=500`
+      );
+      const today = todayISO();
+      reservations = (resRes.value || []).map(item => {
+        const f = item.fields;
+        return {
+          id:         item.id,
+          deviceId:   f.DeviceId   || '',
+          deviceName: f.DeviceName || '',
+          category:   f.Category   || '',
+          employee:   f.Employee   || '',
+          project:    f.Project    || '',
+          startDate:  f.StartDate  || '',
+          endDate:    f.EndDate    || '',
+          status:     f.Status     || 'active'
+        };
+      }).filter(r => r.status === 'active' && r.endDate >= today);
+    } catch (e) {
+      console.warn('DeviceReservations list not found — reservations disabled:', e.message);
+      reservations = [];
     }
 
     // Load log
@@ -721,8 +869,24 @@ async function refreshData() {
       };
     }).sort((a, b) => a.ts - b.ts);
 
+    // Load current AvailableDevices items so we know what's already in the list
+    try {
+      const avRes = await graph(
+        `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.availableListName)}/items?$expand=fields&$top=500`
+      );
+      availableItemIds = {};
+      for (const item of (avRes.value || [])) {
+        availableItemIds[item.fields.DeviceKey || item.fields.Title] = item.id;
+      }
+      // Sync the list to match current availability (best-effort)
+      syncAvailableList().catch(e => console.warn('AvailableDevices sync failed:', e.message));
+    } catch (e) {
+      console.warn('AvailableDevices list not found — skipping sync:', e.message);
+    }
+
     render();
-    if (document.getElementById('tab-log').style.display === 'block') renderLog();
+    if (document.getElementById('tab-log').style.display          === 'block') renderLog();
+    if (document.getElementById('tab-reservations').style.display === 'block') renderReservations();
 
     document.getElementById('last-updated').textContent =
       new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -732,7 +896,7 @@ async function refreshData() {
   }
 }
 
-async function doCheckout(deviceId, deviceName, category, employee, project) {
+async function doCheckout(deviceId, deviceName, category, employee, project, expectedReturn) {
   const ts = Date.now();
   // Add to DeviceCheckouts list (critical — must succeed)
   await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.checkoutsListName)}/items`, {
@@ -743,7 +907,8 @@ async function doCheckout(deviceId, deviceName, category, employee, project) {
       Category:          category,
       Employee:          employee,
       Project:           project,
-      CheckoutTimestamp: ts
+      CheckoutTimestamp: ts,
+      ExpectedReturn:    expectedReturn
     }})
   });
   // Log the event (best-effort — don't block checkout if log fails)
@@ -808,7 +973,8 @@ async function doDeleteAllLog() {
 function render() {
   renderSummary();
   renderEquipment();
-  if (document.getElementById('tab-manage').style.display === 'block') renderManage();
+  if (document.getElementById('tab-manage').style.display       === 'block') renderManage();
+  if (document.getElementById('tab-reservations').style.display === 'block') renderReservations();
 }
 
 function renderSummary() {
@@ -869,6 +1035,17 @@ function renderEquipment() {
 function deviceCard(d) {
   const co    = checkouts[d.id];
   const isOut = !!co;
+  const today = todayISO();
+
+  // Upcoming reservation badges (next 30 days)
+  const upcoming = reservations.filter(r =>
+    r.deviceId === d.id && r.endDate >= today
+  ).sort((a,b) => a.startDate.localeCompare(b.startDate));
+  const activeRes = upcoming.find(r => r.startDate <= today);
+
+  // Overdue check
+  const isOverdue = isOut && co.expectedReturn && co.expectedReturn < today;
+
   return `
     <div class="device-card ${isOut ? 'out' : 'in'}">
       <div class="device-card-top">
@@ -883,12 +1060,15 @@ function deviceCard(d) {
           <div class="info-row"><span class="info-label">Employee:</span>${escHtml(co.employee)}</div>
           <div class="info-row"><span class="info-label">Project:</span>${escHtml(co.project)}</div>
           <div class="info-row"><span class="info-label">Since:</span>${formatTime(co.timestamp)}</div>
-        ` : '<span style="color:var(--green);font-weight:600;">Ready for checkout</span>'}
+          <div class="info-row"><span class="info-label">Due Back:</span>${co.expectedReturn ? formatDate(co.expectedReturn) : '—'}${isOverdue ? '<span class="overdue-pill">⚠ Overdue</span>' : ''}</div>
+        ` : `<span style="color:var(--green);font-weight:600;">${activeRes ? `Reserved by ${escHtml(activeRes.employee)}` : 'Ready for checkout'}</span>`}
+        ${!isOut && upcoming.length > 0 ? `<div class="device-reservation-badge">📅 Reserved ${formatDate(upcoming[0].startDate)}–${formatDate(upcoming[0].endDate)}</div>` : ''}
       </div>
       <div class="device-card-actions">
         ${isOut
-          ? `<button class="btn btn-checkin"  onclick="openCheckin('${d.id}')">↩ Check In</button>`
-          : `<button class="btn btn-checkout" onclick="openCheckout('${d.id}')">↗ Check Out</button>`}
+          ? `<button class="btn btn-checkin" onclick="openCheckin('${d.id}')">↩ Check In</button>`
+          : `<button class="btn btn-checkout" onclick="openCheckout('${d.id}')" ${activeRes ? 'style="opacity:.5"' : ''}>↗ Check Out</button>
+             <button class="btn btn-reserve"  onclick="openReserve('${d.id}')">📅 Reserve</button>`}
       </div>
     </div>`;
 }
@@ -916,29 +1096,55 @@ function renderLog() {
 
 // ── Modal Actions ─────────────────────────────────────────────
 function openCheckout(deviceId) {
+  // Block if device has an active reservation today
+  const today = todayISO();
+  const activeRes = reservations.find(r =>
+    r.deviceId === deviceId && r.startDate <= today && r.endDate >= today
+  );
+  if (activeRes) {
+    toast(`${ALL_DEVICES.find(x=>x.id===deviceId)?.name} is reserved by ${activeRes.employee} until ${formatDate(activeRes.endDate)}`, 'error');
+    return;
+  }
   activeDeviceId = deviceId;
   const d = ALL_DEVICES.find(x => x.id === deviceId);
   document.getElementById('checkout-modal-device').textContent = `${d.category} › ${d.name}`;
   document.getElementById('checkout-name').value    = '';
   document.getElementById('checkout-project').value = '';
+  // Default return date: 1 week from today
+  const nextWeek = new Date(); nextWeek.setDate(nextWeek.getDate() + 7);
+  document.getElementById('checkout-return').value = nextWeek.toISOString().split('T')[0];
+  document.getElementById('checkout-return').min   = today;
   openModal('checkout-modal');
   setTimeout(() => document.getElementById('checkout-name').focus(), 60);
 }
 
 async function confirmCheckout() {
-  const name    = document.getElementById('checkout-name').value.trim();
-  const project = document.getElementById('checkout-project').value.trim();
-  if (!name)    { shakeInput('checkout-name');    return; }
-  if (!project) { shakeInput('checkout-project'); return; }
+  const name         = document.getElementById('checkout-name').value.trim();
+  const project      = document.getElementById('checkout-project').value.trim();
+  const returnDate   = document.getElementById('checkout-return').value;
+  if (!name)       { shakeInput('checkout-name');    return; }
+  if (!project)    { shakeInput('checkout-project'); return; }
+  if (!returnDate) { shakeInput('checkout-return');  return; }
   if (isSaving) return;
+
+  // Warn if a reservation exists during the checkout period
+  const conflicts = reservations.filter(r =>
+    r.deviceId === activeDeviceId &&
+    r.startDate <= returnDate &&
+    r.endDate >= todayISO()
+  );
+  if (conflicts.length > 0) {
+    const c = conflicts[0];
+    if (!confirm(`⚠ This device is reserved by ${c.employee} (${formatDate(c.startDate)}–${formatDate(c.endDate)}). Check out anyway?`)) return;
+  }
 
   const d = ALL_DEVICES.find(x => x.id === activeDeviceId);
   setBtnLoading('checkout-confirm-btn', true);
   isSaving = true;
   try {
-    await doCheckout(activeDeviceId, d.name, d.category, name, project);
+    await doCheckout(activeDeviceId, d.name, d.category, name, project, returnDate);
     closeModal('checkout-modal');
-    toast(`${d.name} checked out to ${name}`, 'success');
+    toast(`${d.name} checked out to ${name} — due ${formatDate(returnDate)}`, 'success');
     await refreshData();
   } catch (e) {
     toast('Error saving checkout: ' + e.message, 'error');
@@ -996,18 +1202,20 @@ document.querySelectorAll('.modal-overlay').forEach(el =>
 );
 
 // ── Tab ───────────────────────────────────────────────────────
+const TABS = ['inventory','reservations','log','manage'];
 function showTab(tab) {
-  document.getElementById('tab-inventory').style.display = tab === 'inventory' ? 'block' : 'none';
-  document.getElementById('tab-log').style.display       = tab === 'log'       ? 'block' : 'none';
-  document.getElementById('tab-manage').style.display    = tab === 'manage'    ? 'block' : 'none';
+  TABS.forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = tab === t ? 'block' : 'none';
+  });
   document.querySelectorAll('nav button').forEach((b, i) =>
-    b.classList.toggle('active',
-      (tab === 'inventory' && i === 0) ||
-      (tab === 'log'       && i === 1) ||
-      (tab === 'manage'    && i === 2))
+    b.classList.toggle('active', TABS[i] === tab)
   );
-  if (tab === 'log')    renderLog();
-  if (tab === 'manage') renderManage();
+  if (tab === 'log')          renderLog();
+  if (tab === 'available')    renderAvailable();
+  if (tab === 'reservations') renderReservations();
+  if (tab === 'manage')       renderManage();
+  // Update URL hash so Teams tab can link directly to a tab
+  history.replaceState(null, '', '#' + tab);
 }
 
 // ── Device Inventory ─────────────────────────────────────────
@@ -1206,6 +1414,333 @@ async function seedDefaultDevices() {
   }
 }
 
+// ── Available Now Tab ─────────────────────────────────────────
+function renderAvailable() {
+  const today = todayISO();
+  const available = ALL_DEVICES.filter(d => {
+    if (checkouts[d.id]) return false;  // currently checked out
+    const activeRes = reservations.find(r =>
+      r.deviceId === d.id && r.startDate <= today && r.endDate >= today
+    );
+    return !activeRes;  // not under active reservation
+  });
+
+  const el = document.getElementById('available-content');
+  document.getElementById('available-count').textContent =
+    `${available.length} of ${ALL_DEVICES.length} devices available`;
+
+  if (available.length === 0) {
+    el.innerHTML = `<div class="manage-empty"><div class="empty-icon">📦</div><p>All devices are currently checked out or reserved.</p></div>`;
+    return;
+  }
+
+  // Group by category
+  const catMap = {};
+  for (const d of available) {
+    if (!catMap[d.category]) catMap[d.category] = [];
+    catMap[d.category].push(d);
+  }
+
+  el.innerHTML = Object.entries(catMap).map(([catName, devices]) => {
+    const icon = CATEGORY_ICONS[catName] || '📦';
+    return `
+      <div class="avail-cat-header">${icon} ${escHtml(catName)}</div>
+      <div class="avail-grid">
+        ${devices.map(d => {
+          const upcoming = reservations
+            .filter(r => r.deviceId === d.id && r.startDate > today)
+            .sort((a,b) => a.startDate.localeCompare(b.startDate))[0];
+          return `
+            <div class="avail-row">
+              <div class="avail-row-info">
+                <div class="avail-row-name">${escHtml(d.name)}</div>
+                ${upcoming ? `<div class="avail-upcoming">📅 Reserved ${formatDate(upcoming.startDate)} – ${formatDate(upcoming.endDate)} by ${escHtml(upcoming.employee)}</div>` : ''}
+              </div>
+              <button class="btn btn-checkout" onclick="openCheckout('${d.id}')">↗ Check Out</button>
+              <button class="btn btn-reserve"  onclick="openReserve('${d.id}')">📅 Reserve</button>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }).join('');
+}
+
+// ── Reservations Tab ──────────────────────────────────────────
+function renderReservations() {
+  const today = todayISO();
+  const el = document.getElementById('reservations-content');
+
+  if (reservations.length === 0) {
+    el.innerHTML = `
+      <div class="manage-empty">
+        <div class="empty-icon">📅</div>
+        <p style="margin-bottom:16px">No upcoming reservations.</p>
+        <button class="btn-add-device" onclick="openReserve(null)">+ Make a Reservation</button>
+      </div>`;
+    return;
+  }
+
+  // Sort by start date
+  const sorted = [...reservations].sort((a,b) => a.startDate.localeCompare(b.startDate));
+  const active  = sorted.filter(r => r.startDate <= today);
+  const upcoming = sorted.filter(r => r.startDate > today);
+
+  let html = '';
+  if (active.length) {
+    html += `<div class="res-section-label">Active Now</div>`;
+    html += active.map(resCard).join('');
+  }
+  if (upcoming.length) {
+    html += `<div class="res-section-label">Upcoming</div>`;
+    html += upcoming.map(resCard).join('');
+  }
+  el.innerHTML = html;
+}
+
+function resCard(r) {
+  const today = todayISO();
+  const isActive = r.startDate <= today;
+  return `
+    <div class="res-card">
+      <div class="res-card-dates">
+        <div class="res-date-range">${formatDateShort(r.startDate)}</div>
+        <div class="res-date-sub">to</div>
+        <div class="res-date-range">${formatDateShort(r.endDate)}</div>
+      </div>
+      <div class="res-card-info">
+        <div class="res-card-device">
+          ${escHtml(r.deviceName)}
+          ${isActive ? '<span class="res-active-pill">Active</span>' : ''}
+        </div>
+        <div class="res-card-meta">
+          👤 ${escHtml(r.employee)} &nbsp;·&nbsp; 📋 ${escHtml(r.project || '—')}
+          <br><span style="font-size:11px;color:var(--muted)">${escHtml(r.category)}</span>
+        </div>
+      </div>
+      <button class="btn-cancel-res" onclick="openCancelReservation('${r.id}')">✕ Cancel</button>
+    </div>`;
+}
+
+// ── Reserve Modal ─────────────────────────────────────────────
+function openReserve(deviceId) {
+  activeDeviceId = deviceId;
+  const today = todayISO();
+
+  if (deviceId) {
+    const d = ALL_DEVICES.find(x => x.id === deviceId);
+    document.getElementById('reserve-modal-device').textContent = d ? `${d.category} › ${d.name}` : '';
+  } else {
+    document.getElementById('reserve-modal-device').textContent = 'Select a device below';
+  }
+
+  document.getElementById('reserve-name').value    = '';
+  document.getElementById('reserve-project').value = '';
+  document.getElementById('reserve-start').value   = today;
+  document.getElementById('reserve-start').min     = today;
+  // Default end: one week out
+  const end = new Date(); end.setDate(end.getDate() + 6);
+  document.getElementById('reserve-end').value = end.toISOString().split('T')[0];
+  document.getElementById('reserve-end').min   = today;
+  document.getElementById('reserve-conflict-msg').style.display = 'none';
+
+  // If no deviceId, inject a device selector
+  const devSelId = 'reserve-device-select';
+  let devSelHtml = document.getElementById(devSelId) ? '' : '';
+  if (!deviceId) {
+    // Add a device picker if not already present
+    const existing = document.getElementById(devSelId);
+    if (!existing) {
+      const grp = document.createElement('div');
+      grp.className = 'form-group';
+      grp.id = devSelId + '-wrap';
+      grp.innerHTML = `<label>Device *</label>
+        <select id="${devSelId}" style="width:100%;padding:10px 13px;border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);">
+          <option value="">— Choose a device —</option>
+          ${ALL_DEVICES.map(d => `<option value="${d.id}">${escHtml(d.category)} › ${escHtml(d.name)}</option>`).join('')}
+        </select>`;
+      document.getElementById('reserve-modal').querySelector('.modal').insertBefore(
+        grp,
+        document.getElementById('reserve-name').parentElement
+      );
+    }
+  } else {
+    // Remove device picker if it exists
+    const wrap = document.getElementById(devSelId + '-wrap');
+    if (wrap) wrap.remove();
+  }
+
+  openModal('reserve-modal');
+  setTimeout(() => document.getElementById('reserve-name').focus(), 60);
+}
+
+async function confirmReserve() {
+  const name      = document.getElementById('reserve-name').value.trim();
+  const project   = document.getElementById('reserve-project').value.trim();
+  const startDate = document.getElementById('reserve-start').value;
+  const endDate   = document.getElementById('reserve-end').value;
+  const devSel    = document.getElementById('reserve-device-select');
+  const deviceId  = activeDeviceId || (devSel ? devSel.value : '');
+
+  if (!name)      { shakeInput('reserve-name');    return; }
+  if (!project)   { shakeInput('reserve-project'); return; }
+  if (!startDate) { shakeInput('reserve-start');   return; }
+  if (!endDate)   { shakeInput('reserve-end');     return; }
+  if (!deviceId)  { toast('Please select a device', 'error'); return; }
+  if (endDate < startDate) {
+    shakeInput('reserve-end');
+    toast('End date must be on or after start date', 'error');
+    return;
+  }
+
+  const d = ALL_DEVICES.find(x => x.id === deviceId);
+  const conflictEl = document.getElementById('reserve-conflict-msg');
+  conflictEl.style.display = 'none';
+
+  // Check reservation conflicts
+  const resConflicts = reservations.filter(r =>
+    r.deviceId === deviceId && r.startDate <= endDate && r.endDate >= startDate
+  );
+  if (resConflicts.length > 0) {
+    const c = resConflicts[0];
+    conflictEl.textContent = `⚠ Conflict: ${escHtml(d?.name)} is already reserved by ${escHtml(c.employee)} from ${formatDate(c.startDate)} to ${formatDate(c.endDate)}.`;
+    conflictEl.style.display = 'block';
+    return;
+  }
+
+  // Check active checkout conflict
+  const co = checkouts[deviceId];
+  if (co && co.expectedReturn && co.expectedReturn >= startDate) {
+    conflictEl.textContent = `⚠ Conflict: ${escHtml(d?.name)} is checked out by ${escHtml(co.employee)} with expected return ${formatDate(co.expectedReturn)}, which overlaps your reservation start.`;
+    conflictEl.style.display = 'block';
+    return;
+  }
+  if (co && !co.expectedReturn) {
+    conflictEl.textContent = `⚠ ${escHtml(d?.name)} is currently checked out with no return date set. It may not be available by ${formatDate(startDate)}.`;
+    conflictEl.style.display = 'block';
+    // Allow override after warning — don't return, let them proceed
+  }
+
+  setBtnLoading('reserve-confirm-btn', true);
+  try {
+    const resId = 'res-' + Date.now();
+    await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.reservationsListName)}/items`,
+      { method: 'POST', body: JSON.stringify({ fields: {
+          Title:      resId,
+          DeviceId:   deviceId,
+          DeviceName: d ? d.name : deviceId,
+          Category:   d ? d.category : '',
+          Employee:   name,
+          Project:    project,
+          StartDate:  startDate,
+          EndDate:    endDate,
+          Status:     'active'
+      }})}
+    );
+    closeModal('reserve-modal');
+    toast(`${d?.name} reserved for ${name} (${formatDate(startDate)}–${formatDate(endDate)})`, 'success');
+    await refreshData();
+    showTab('reservations');
+  } catch (e) {
+    toast('Error saving reservation: ' + e.message, 'error');
+  } finally {
+    setBtnLoading('reserve-confirm-btn', false);
+  }
+}
+
+function openCancelReservation(itemId) {
+  const r = reservations.find(x => x.id === itemId);
+  if (!r) return;
+  activeReservationItemId = itemId;
+  document.getElementById('cancel-res-msg').innerHTML =
+    `Cancel the reservation for <strong>${escHtml(r.deviceName)}</strong> by <strong>${escHtml(r.employee)}</strong> (${formatDate(r.startDate)} – ${formatDate(r.endDate)})?`;
+  openModal('cancel-res-modal');
+}
+
+async function confirmCancelReservation() {
+  setBtnLoading('cancel-res-confirm-btn', true);
+  try {
+    // Mark as cancelled rather than deleting (preserves history)
+    await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.reservationsListName)}/items/${activeReservationItemId}`,
+      { method: 'PATCH', body: JSON.stringify({ fields: { Status: 'cancelled' } }) }
+    );
+    closeModal('cancel-res-modal');
+    toast('Reservation cancelled', 'success');
+    await refreshData();
+  } catch (e) {
+    toast('Error cancelling reservation: ' + e.message, 'error');
+  } finally {
+    setBtnLoading('cancel-res-confirm-btn', false);
+  }
+}
+
+// ── AvailableDevices List Sync ────────────────────────────────
+async function syncAvailableList() {
+  const today = todayISO();
+
+  // Which devices should currently be in the list
+  const shouldBeAvailable = new Set(
+    ALL_DEVICES.filter(d => {
+      if (checkouts[d.id]) return false;
+      const activeRes = reservations.find(r =>
+        r.deviceId === d.id && r.startDate <= today && r.endDate >= today
+      );
+      return !activeRes;
+    }).map(d => d.id)
+  );
+
+  const currentInList = new Set(Object.keys(availableItemIds));
+
+  // Remove devices that are no longer available
+  for (const deviceId of currentInList) {
+    if (!shouldBeAvailable.has(deviceId)) {
+      await graph(
+        `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.availableListName)}/items/${availableItemIds[deviceId]}`,
+        { method: 'DELETE' }
+      );
+      delete availableItemIds[deviceId];
+    }
+  }
+
+  // Add devices that became available and aren't in the list yet
+  for (const deviceId of shouldBeAvailable) {
+    if (!currentInList.has(deviceId)) {
+      const d = ALL_DEVICES.find(x => x.id === deviceId);
+      if (!d) continue;
+      // Find next upcoming reservation for display
+      const nextRes = reservations
+        .filter(r => r.deviceId === deviceId && r.startDate > today)
+        .sort((a,b) => a.startDate.localeCompare(b.startDate))[0];
+      const item = await graph(
+        `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.availableListName)}/items`,
+        { method: 'POST', body: JSON.stringify({ fields: {
+            Title:           d.name,
+            DeviceKey:       d.id,
+            Category:        d.category,
+            NextReservation: nextRes ? `${formatDate(nextRes.startDate)} — ${escHtml(nextRes.employee)}` : ''
+          }})
+        }
+      );
+      availableItemIds[deviceId] = item.id;
+    }
+  }
+
+  // Update NextReservation field for devices that are in the list
+  for (const deviceId of shouldBeAvailable) {
+    if (!currentInList.has(deviceId)) continue; // was just added above
+    const d = ALL_DEVICES.find(x => x.id === deviceId);
+    if (!d) continue;
+    const nextRes = reservations
+      .filter(r => r.deviceId === deviceId && r.startDate > today)
+      .sort((a,b) => a.startDate.localeCompare(b.startDate))[0];
+    const newVal = nextRes ? `${formatDate(nextRes.startDate)} — ${escHtml(nextRes.employee)}` : '';
+    await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.availableListName)}/items/${availableItemIds[deviceId]}`,
+      { method: 'PATCH', body: JSON.stringify({ fields: { NextReservation: newVal } }) }
+    );
+  }
+}
+
 // ── Polling ───────────────────────────────────────────────────
 function startPolling() {
   clearInterval(pollTimer);
@@ -1230,6 +1765,19 @@ function hideScreens() {
 // ── Utilities ─────────────────────────────────────────────────
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function todayISO() {
+  return new Date().toISOString().split('T')[0];
+}
+function formatDate(isoDate) {
+  if (!isoDate) return '—';
+  const d = new Date(isoDate + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function formatDateShort(isoDate) {
+  if (!isoDate) return '—';
+  const d = new Date(isoDate + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
 }
 function formatTime(ts) {
   return new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
@@ -1280,6 +1828,15 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────
+// Honor URL hash for deep-linking (e.g. Teams tab to #available)
+(function() {
+  const hash = location.hash.replace('#', '');
+  if (TABS.includes(hash) && hash !== 'inventory') {
+    // Will be applied after app loads — store it
+    window._initialTab = hash;
+  }
+})();
+
 initMsal();
 </script>
 </body>
