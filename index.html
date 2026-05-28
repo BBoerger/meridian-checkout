@@ -837,7 +837,7 @@ async function refreshData() {
         const f = item.fields;
         return {
           id:         item.id,
-          deviceId:   f.DeviceId   || '',
+          deviceId:   f.DeviceKey  || '',
           deviceName: f.DeviceName || '',
           category:   f.Category   || '',
           employee:   f.Employee   || '',
@@ -1626,7 +1626,7 @@ async function confirmReserve() {
       `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.reservationsListName)}/items`,
       { method: 'POST', body: JSON.stringify({ fields: {
           Title:      resId,
-          DeviceId:   deviceId,
+          DeviceKey:  deviceId,
           DeviceName: d ? d.name : deviceId,
           Category:   d ? d.category : '',
           Employee:   name,
