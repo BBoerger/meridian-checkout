@@ -645,7 +645,7 @@ async function refreshData() {
 
 async function doCheckout(deviceId, deviceName, category, employee, project) {
   const ts = Date.now();
-  // Add to DeviceCheckouts list
+  // Add to DeviceCheckouts list (critical — must succeed)
   await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.checkoutsListName)}/items`, {
     method: 'POST',
     body: JSON.stringify({ fields: {
@@ -657,40 +657,48 @@ async function doCheckout(deviceId, deviceName, category, employee, project) {
       CheckoutTimestamp: ts
     }})
   });
-  // Log the event
-  await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
-    method: 'POST',
-    body: JSON.stringify({ fields: {
-      Title:          'out',
-      DeviceName:     deviceName,
-      Category:       category,
-      Employee:       employee,
-      Project:        project,
-      EventTimestamp: ts
-    }})
-  });
+  // Log the event (best-effort — don't block checkout if log fails)
+  try {
+    await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
+      method: 'POST',
+      body: JSON.stringify({ fields: {
+        Title:          'out',
+        DeviceName:     deviceName,
+        Category:       category,
+        Employee:       employee,
+        Project:        project,
+        EventTimestamp: ts
+      }})
+    });
+  } catch (logErr) {
+    console.warn('CheckoutLog write failed (checkout still saved):', logErr.message);
+  }
 }
 
 async function doCheckin(deviceId) {
   const co = checkouts[deviceId];
   if (!co) return;
-  // Remove from DeviceCheckouts list
+  // Remove from DeviceCheckouts list (critical — must succeed)
   await graph(
     `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.checkoutsListName)}/items/${co.itemId}`,
     { method: 'DELETE' }
   );
-  // Log the event
-  await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
-    method: 'POST',
-    body: JSON.stringify({ fields: {
-      Title:          'in',
-      DeviceName:     co.deviceName,
-      Category:       co.category,
-      Employee:       co.employee,
-      Project:        co.project,
-      EventTimestamp: Date.now()
-    }})
-  });
+  // Log the event (best-effort — don't block checkin if log fails)
+  try {
+    await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
+      method: 'POST',
+      body: JSON.stringify({ fields: {
+        Title:          'in',
+        DeviceName:     co.deviceName,
+        Category:       co.category,
+        Employee:       co.employee,
+        Project:        co.project,
+        EventTimestamp: Date.now()
+      }})
+    });
+  } catch (logErr) {
+    console.warn('CheckoutLog write failed (checkin still saved):', logErr.message);
+  }
 }
 
 async function doDeleteAllLog() {
