@@ -621,9 +621,8 @@ async function refreshData() {
     logEntries = (logRes.value || []).map(item => {
       const f = item.fields;
       return {
-        ts:         f.EventTimestamp || 0,
+        ts:         item.createdDateTime ? new Date(item.createdDateTime).getTime() : 0,
         event:      f.Title || '',
-        deviceId:   f.DeviceId   || '',
         deviceName: f.DeviceName || '',
         category:   f.Category   || '',
         employee:   f.Employee   || '',
@@ -662,12 +661,11 @@ async function doCheckout(deviceId, deviceName, category, employee, project) {
     await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
       method: 'POST',
       body: JSON.stringify({ fields: {
-        Title:          'out',
-        DeviceName:     deviceName,
-        Category:       category,
-        Employee:       employee,
-        Project:        project,
-        EventTimestamp: ts
+        Title:      'out',
+        DeviceName: deviceName,
+        Category:   category,
+        Employee:   employee,
+        Project:    project
       }})
     });
   } catch (logErr) {
@@ -688,12 +686,11 @@ async function doCheckin(deviceId) {
     await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
       method: 'POST',
       body: JSON.stringify({ fields: {
-        Title:          'in',
-        DeviceName:     co.deviceName,
-        Category:       co.category,
-        Employee:       co.employee,
-        Project:        co.project,
-        EventTimestamp: Date.now()
+        Title:      'in',
+        DeviceName: co.deviceName,
+        Category:   co.category,
+        Employee:   co.employee,
+        Project:    co.project
       }})
     });
   } catch (logErr) {
