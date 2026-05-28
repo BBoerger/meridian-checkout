@@ -282,6 +282,56 @@
     #toast.error   { background: var(--red); }
     #toast.info    { background: var(--brand-light); }
 
+    /* ── Manage Tab ── */
+    .manage-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 22px;
+    }
+    .manage-toolbar h2 { font-size: 18px; font-weight: 800; color: var(--brand); }
+    .btn-add-device {
+      padding: 9px 18px; background: var(--brand); color: #fff;
+      border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-add-device:hover { background: var(--brand-light); }
+    .manage-category { margin-bottom: 24px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+    .manage-cat-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 16px; background: var(--brand); color: #fff; font-weight: 700; font-size: 14px;
+    }
+    .manage-device-list { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius) var(--radius); }
+    .manage-device-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+    }
+    .manage-device-row:last-child { border-bottom: none; }
+    .manage-device-name { font-weight: 600; font-size: 14px; }
+    .manage-device-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-left: 10px; }
+    .manage-device-status.out { background: var(--red-bg); color: var(--red); }
+    .manage-device-status.available { background: var(--green-bg); color: #16a34a; }
+    .manage-device-actions { display: flex; gap: 8px; }
+    .btn-sm {
+      padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--border); background: var(--surface); cursor: pointer;
+      color: var(--text); white-space: nowrap;
+    }
+    .btn-sm:hover { background: var(--bg); }
+    .btn-danger-sm { color: var(--red); border-color: #fca5a5; background: var(--red-bg); }
+    .btn-danger-sm:hover { background: var(--red); color: #fff; border-color: var(--red); }
+    .manage-empty {
+      text-align: center; padding: 60px 20px; color: var(--muted);
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .manage-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .icon-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .icon-option {
+      width: 38px; height: 38px; font-size: 20px; display: flex; align-items: center;
+      justify-content: center; border: 2px solid var(--border); border-radius: 8px;
+      cursor: pointer; transition: border-color .15s, background .15s;
+    }
+    .icon-option:hover  { border-color: var(--brand-light); background: var(--bg); }
+    .icon-option.selected { border-color: var(--brand); background: var(--bg); }
+
     /* ── Responsive ── */
     @media (max-width: 600px) {
       main { padding: 16px; }
@@ -353,6 +403,7 @@
 <nav>
   <button class="active" onclick="showTab('inventory')">📦 Inventory</button>
   <button onclick="showTab('log')">📋 Checkout Log</button>
+  <button onclick="showTab('manage')">⚙️ Manage Devices</button>
 </nav>
 
 <!-- ═══════════════ MAIN ═══════════════ -->
@@ -360,6 +411,14 @@
   <div id="tab-inventory">
     <div class="summary-bar" id="summary-bar"></div>
     <div id="equipment-sections"></div>
+  </div>
+
+  <div id="tab-manage" style="display:none;">
+    <div class="manage-toolbar">
+      <h2>Device Management</h2>
+      <button class="btn-add-device" onclick="openAddDevice()">+ Add Device</button>
+    </div>
+    <div id="manage-content"></div>
   </div>
 
   <div id="tab-log" style="display:none;">
@@ -431,6 +490,41 @@
   </div>
 </div>
 
+<!-- Device Add/Edit Modal -->
+<div class="modal-overlay" id="device-modal">
+  <div class="modal">
+    <h3 id="device-modal-title">Add Device</h3>
+    <div class="form-group">
+      <label>Device Name *</label>
+      <input type="text" id="device-modal-name" placeholder="e.g. GoPro #4" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label>Category *</label>
+      <input type="text" id="device-modal-category" placeholder="e.g. GoPros" list="category-suggestions" autocomplete="off" />
+      <datalist id="category-suggestions"></datalist>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+        Pick an existing category or type a new one
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('device-modal')">Cancel</button>
+      <button class="btn-confirm" id="device-modal-btn" onclick="confirmSaveDevice()">+ Add Device</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Device Confirmation Modal -->
+<div class="modal-overlay" id="delete-device-modal">
+  <div class="modal">
+    <h3>Remove Device?</h3>
+    <p class="confirm-msg" id="delete-device-modal-msg"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('delete-device-modal')">Cancel</button>
+      <button class="btn-confirm danger" id="delete-device-confirm-btn" onclick="deleteDevice()">🗑 Yes, Remove</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <!-- ═══════════════ SCRIPT ═══════════════ -->
@@ -439,57 +533,51 @@
 //  STEP 1: After Azure app registration, paste your Client ID
 // ════════════════════════════════════════════════════════════
 const CONFIG = {
-  clientId:          "ff1fd3ee-7baf-4d72-b978-742a29de8eab",
-  tenantId:          "4fa4840a-2a70-49e0-93ab-fd8b099bbeed",
-  siteHostname:      "meridianak.sharepoint.com",
-  checkoutsListName: "DeviceCheckouts",
-  logListName:       "CheckoutLog",
-  pollInterval:      30000   // ms — how often to auto-refresh
+  clientId:                "ff1fd3ee-7baf-4d72-b978-742a29de8eab",
+  tenantId:                "4fa4840a-2a70-49e0-93ab-fd8b099bbeed",
+  siteHostname:            "meridianak.sharepoint.com",
+  checkoutsListName:       "DeviceCheckouts",
+  logListName:             "CheckoutLog",
+  deviceInventoryListName: "DeviceInventory",
+  pollInterval:            30000
 };
 // ════════════════════════════════════════════════════════════
 
-// ── Inventory ────────────────────────────────────────────────
-const CATEGORIES = [
-  {
-    id: 'starlinks', name: 'Starlinks', icon: '📡',
-    devices: [
-      { id: 'sl-1', name: 'Standard Starlink #1', type: 'Standard' },
-      { id: 'sl-2', name: 'Starlink #2',          type: 'Standard' },
-      { id: 'sl-3', name: 'Starlink #3',          type: 'Standard' },
-      { id: 'sl-4', name: 'Mini Starlink #4',     type: 'Mini'     },
-      { id: 'sl-5', name: 'Mini Starlink #5',     type: 'Mini'     },
-      { id: 'sl-6', name: 'Mini Starlink #6',     type: 'Mini'     },
-      { id: 'sl-7', name: 'Starlink #7',          type: 'Standard' },
-    ]
-  },
-  {
-    id: 'drones', name: 'DJI Drones', icon: '🚁',
-    devices: [
-      { id: 'dj-1', name: 'Drone #1', type: 'DJI' },
-      { id: 'dj-2', name: 'Drone #2', type: 'DJI' },
-      { id: 'dj-3', name: 'Drone #3', type: 'DJI' },
-      { id: 'dj-4', name: 'Drone #4', type: 'DJI' },
-    ]
-  },
-  {
-    id: 'gopros', name: 'GoPros', icon: '🎥',
-    devices: [
-      { id: 'gp-1', name: 'GoPro #1', type: 'GoPro' },
-      { id: 'gp-2', name: 'GoPro #2', type: 'GoPro' },
-      { id: 'gp-3', name: 'GoPro #3', type: 'GoPro' },
-    ]
-  }
+// ── Category icon mapping (add new entries here for custom icons) ──
+const CATEGORY_ICONS = {
+  'Starlinks':  '📡',
+  'DJI Drones': '🚁',
+  'GoPros':     '🎥',
+};
+// Default devices — only used for the one-time "Import Defaults" seeding
+const DEFAULT_DEVICES = [
+  { name: 'Standard Starlink #1', category: 'Starlinks',  id: 'sl-1' },
+  { name: 'Starlink #2',          category: 'Starlinks',  id: 'sl-2' },
+  { name: 'Starlink #3',          category: 'Starlinks',  id: 'sl-3' },
+  { name: 'Mini Starlink #4',     category: 'Starlinks',  id: 'sl-4' },
+  { name: 'Mini Starlink #5',     category: 'Starlinks',  id: 'sl-5' },
+  { name: 'Mini Starlink #6',     category: 'Starlinks',  id: 'sl-6' },
+  { name: 'Starlink #7',          category: 'Starlinks',  id: 'sl-7' },
+  { name: 'Drone #1',             category: 'DJI Drones', id: 'dj-1' },
+  { name: 'Drone #2',             category: 'DJI Drones', id: 'dj-2' },
+  { name: 'Drone #3',             category: 'DJI Drones', id: 'dj-3' },
+  { name: 'Drone #4',             category: 'DJI Drones', id: 'dj-4' },
+  { name: 'GoPro #1',             category: 'GoPros',     id: 'gp-1' },
+  { name: 'GoPro #2',             category: 'GoPros',     id: 'gp-2' },
+  { name: 'GoPro #3',             category: 'GoPros',     id: 'gp-3' },
 ];
-const ALL_DEVICES = CATEGORIES.flatMap(c => c.devices.map(d => ({ ...d, category: c.name })));
+let ALL_DEVICES = []; // loaded from DeviceInventory SharePoint list
 
 // ── State ─────────────────────────────────────────────────────
 let msalInstance = null;
 let siteId       = null;
-let checkouts    = {};   // { deviceId: { employee, project, timestamp, itemId } }
-let logEntries   = [];   // [{ ts, event, deviceId, deviceName, category, employee, project, itemId }]
-let activeDeviceId = null;
-let pollTimer      = null;
-let isSaving       = false;
+let checkouts    = {};
+let logEntries   = [];
+let activeDeviceId          = null;
+let pollTimer               = null;
+let isSaving                = false;
+let editingDeviceItemId     = null;  // SharePoint itemId of device being edited
+let activeDeleteItemId      = null;  // SharePoint itemId of device being deleted
 
 // ── MSAL Init ─────────────────────────────────────────────────
 const msalConfig = {
@@ -583,6 +671,8 @@ async function startApp() {
     const site = await graph(`/sites/${CONFIG.siteHostname}`);
     siteId = site.id;
 
+    showLoading('Loading devices…');
+    await loadDevices();
     showLoading('Loading inventory…');
     await refreshData();
 
@@ -718,6 +808,7 @@ async function doDeleteAllLog() {
 function render() {
   renderSummary();
   renderEquipment();
+  if (document.getElementById('tab-manage').style.display === 'block') renderManage();
 }
 
 function renderSummary() {
@@ -744,16 +835,35 @@ function renderSummary() {
 }
 
 function renderEquipment() {
-  document.getElementById('equipment-sections').innerHTML = CATEGORIES.map(cat => `
-    <div class="category-block">
-      <div class="section-header">
-        <h2><span>${cat.icon}</span>${cat.name}</h2>
-        <span style="font-size:12px;color:var(--muted)">
-          ${cat.devices.filter(d => !checkouts[d.id]).length} / ${cat.devices.length} available
-        </span>
-      </div>
-      <div class="equipment-grid">${cat.devices.map(deviceCard).join('')}</div>
-    </div>`).join('');
+  if (ALL_DEVICES.length === 0) {
+    document.getElementById('equipment-sections').innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--muted);">
+        <div style="font-size:48px;margin-bottom:12px">📦</div>
+        <p style="margin-bottom:16px">No devices in inventory yet.</p>
+        <button class="btn-add-device" onclick="showTab('manage')">Go to Manage Devices →</button>
+      </div>`;
+    return;
+  }
+  // Group by category, preserving insertion order
+  const catMap = {};
+  for (const d of ALL_DEVICES) {
+    if (!catMap[d.category]) catMap[d.category] = [];
+    catMap[d.category].push(d);
+  }
+  document.getElementById('equipment-sections').innerHTML =
+    Object.entries(catMap).map(([catName, devices]) => {
+      const icon = CATEGORY_ICONS[catName] || '📦';
+      return `
+        <div class="category-block">
+          <div class="section-header">
+            <h2><span>${icon}</span>${escHtml(catName)}</h2>
+            <span style="font-size:12px;color:var(--muted)">
+              ${devices.filter(d => !checkouts[d.id]).length} / ${devices.length} available
+            </span>
+          </div>
+          <div class="equipment-grid">${devices.map(deviceCard).join('')}</div>
+        </div>`;
+    }).join('');
 }
 
 function deviceCard(d) {
@@ -763,8 +873,8 @@ function deviceCard(d) {
     <div class="device-card ${isOut ? 'out' : 'in'}">
       <div class="device-card-top">
         <div>
-          <div class="device-name">${d.name}</div>
-          <div class="device-type">${d.type}</div>
+          <div class="device-name">${escHtml(d.name)}</div>
+          <div class="device-type">${escHtml(d.category)}</div>
         </div>
         <span class="status-pill ${isOut ? 'out' : 'available'}">${isOut ? 'Checked Out' : 'Available'}</span>
       </div>
@@ -889,10 +999,211 @@ document.querySelectorAll('.modal-overlay').forEach(el =>
 function showTab(tab) {
   document.getElementById('tab-inventory').style.display = tab === 'inventory' ? 'block' : 'none';
   document.getElementById('tab-log').style.display       = tab === 'log'       ? 'block' : 'none';
+  document.getElementById('tab-manage').style.display    = tab === 'manage'    ? 'block' : 'none';
   document.querySelectorAll('nav button').forEach((b, i) =>
-    b.classList.toggle('active', (tab === 'inventory' && i === 0) || (tab === 'log' && i === 1))
+    b.classList.toggle('active',
+      (tab === 'inventory' && i === 0) ||
+      (tab === 'log'       && i === 1) ||
+      (tab === 'manage'    && i === 2))
   );
-  if (tab === 'log') renderLog();
+  if (tab === 'log')    renderLog();
+  if (tab === 'manage') renderManage();
+}
+
+// ── Device Inventory ─────────────────────────────────────────
+async function loadDevices() {
+  try {
+    const res = await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.deviceInventoryListName)}/items?$expand=fields&$top=500`
+    );
+    ALL_DEVICES = (res.value || []).map(item => ({
+      id:              item.fields.Title,
+      name:            item.fields.DeviceName || '',
+      category:        item.fields.Category   || '',
+      sortOrder:       item.fields.SortOrder  || 0,
+      inventoryItemId: item.id
+    })).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  } catch (e) {
+    console.warn('DeviceInventory list not found or failed to load:', e.message);
+    ALL_DEVICES = [];
+  }
+}
+
+function renderManage() {
+  const el = document.getElementById('manage-content');
+  if (ALL_DEVICES.length === 0) {
+    el.innerHTML = `
+      <div class="manage-empty">
+        <div class="empty-icon">📦</div>
+        <p style="margin-bottom:20px;font-size:15px">No devices yet.</p>
+        <p style="margin-bottom:24px;font-size:13px">Add devices one at a time, or import the original 14 to get started quickly.</p>
+        <button class="btn-add-device" onclick="seedDefaultDevices()" id="seed-btn">📥 Import Default 14 Devices</button>
+      </div>`;
+    return;
+  }
+  // Group by category
+  const catMap = {};
+  for (const d of ALL_DEVICES) {
+    if (!catMap[d.category]) catMap[d.category] = [];
+    catMap[d.category].push(d);
+  }
+  el.innerHTML = Object.entries(catMap).map(([catName, devices]) => {
+    const icon = CATEGORY_ICONS[catName] || '📦';
+    return `
+      <div class="manage-category">
+        <div class="manage-cat-header">
+          <span>${icon} ${escHtml(catName)}</span>
+          <span style="font-size:12px;font-weight:400;opacity:.75">${devices.length} device${devices.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="manage-device-list">
+          ${devices.map(d => {
+            const isOut = !!checkouts[d.id];
+            return `
+              <div class="manage-device-row">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="manage-device-name">${escHtml(d.name)}</span>
+                  <span class="manage-device-status ${isOut ? 'out' : 'available'}">${isOut ? 'Checked Out' : 'Available'}</span>
+                </div>
+                <div class="manage-device-actions">
+                  <button class="btn-sm" onclick="openEditDevice('${d.inventoryItemId}')">✏ Edit</button>
+                  <button class="btn-sm btn-danger-sm" onclick="confirmDeleteDevice('${d.inventoryItemId}')">🗑 Delete</button>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openAddDevice() {
+  editingDeviceItemId = null;
+  document.getElementById('device-modal-title').textContent = 'Add Device';
+  document.getElementById('device-modal-btn').textContent   = '+ Add Device';
+  document.getElementById('device-modal-name').value        = '';
+  document.getElementById('device-modal-category').value    = '';
+  // Populate category suggestions from existing devices
+  const cats = [...new Set(ALL_DEVICES.map(d => d.category))];
+  document.getElementById('category-suggestions').innerHTML =
+    cats.map(c => `<option value="${escHtml(c)}">`).join('');
+  openModal('device-modal');
+  setTimeout(() => document.getElementById('device-modal-name').focus(), 60);
+}
+
+function openEditDevice(inventoryItemId) {
+  const d = ALL_DEVICES.find(x => x.inventoryItemId === inventoryItemId);
+  if (!d) return;
+  editingDeviceItemId = inventoryItemId;
+  document.getElementById('device-modal-title').textContent = 'Edit Device';
+  document.getElementById('device-modal-btn').textContent   = '✓ Save Changes';
+  document.getElementById('device-modal-name').value        = d.name;
+  document.getElementById('device-modal-category').value    = d.category;
+  const cats = [...new Set(ALL_DEVICES.map(x => x.category))];
+  document.getElementById('category-suggestions').innerHTML =
+    cats.map(c => `<option value="${escHtml(c)}">`).join('');
+  openModal('device-modal');
+  setTimeout(() => document.getElementById('device-modal-name').focus(), 60);
+}
+
+async function confirmSaveDevice() {
+  const name     = document.getElementById('device-modal-name').value.trim();
+  const category = document.getElementById('device-modal-category').value.trim();
+  if (!name)     { shakeInput('device-modal-name');     return; }
+  if (!category) { shakeInput('device-modal-category'); return; }
+
+  setBtnLoading('device-modal-btn', true);
+  try {
+    if (editingDeviceItemId) {
+      // Edit existing device
+      await graph(
+        `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.deviceInventoryListName)}/items/${editingDeviceItemId}`,
+        { method: 'PATCH', body: JSON.stringify({ fields: { DeviceName: name, Category: category } }) }
+      );
+      toast(`${name} updated`, 'success');
+    } else {
+      // Add new device — generate a unique slug ID
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const id   = slug + '-' + Date.now();
+      await graph(
+        `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.deviceInventoryListName)}/items`,
+        { method: 'POST', body: JSON.stringify({ fields: {
+            Title:      id,
+            DeviceName: name,
+            Category:   category,
+            SortOrder:  ALL_DEVICES.length
+          }})
+        }
+      );
+      toast(`${name} added to inventory`, 'success');
+    }
+    closeModal('device-modal');
+    await loadDevices();
+    render();
+    renderManage();
+  } catch (e) {
+    toast('Error saving device: ' + e.message, 'error');
+  } finally {
+    setBtnLoading('device-modal-btn', false);
+  }
+}
+
+function confirmDeleteDevice(inventoryItemId) {
+  const d = ALL_DEVICES.find(x => x.inventoryItemId === inventoryItemId);
+  if (!d) return;
+  if (checkouts[d.id]) {
+    toast(`${d.name} is currently checked out — check it in first before removing it`, 'error');
+    return;
+  }
+  activeDeleteItemId = inventoryItemId;
+  document.getElementById('delete-device-modal-msg').textContent =
+    `This will permanently remove "${d.name}" from the inventory. This cannot be undone.`;
+  openModal('delete-device-modal');
+}
+
+async function deleteDevice() {
+  setBtnLoading('delete-device-confirm-btn', true);
+  const d = ALL_DEVICES.find(x => x.inventoryItemId === activeDeleteItemId);
+  try {
+    await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.deviceInventoryListName)}/items/${activeDeleteItemId}`,
+      { method: 'DELETE' }
+    );
+    toast(`${d ? d.name : 'Device'} removed from inventory`, 'success');
+    closeModal('delete-device-modal');
+    await loadDevices();
+    render();
+    renderManage();
+  } catch (e) {
+    toast('Error removing device: ' + e.message, 'error');
+  } finally {
+    setBtnLoading('delete-device-confirm-btn', false);
+  }
+}
+
+async function seedDefaultDevices() {
+  const btn = document.getElementById('seed-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
+  try {
+    for (let i = 0; i < DEFAULT_DEVICES.length; i++) {
+      const d = DEFAULT_DEVICES[i];
+      await graph(
+        `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.deviceInventoryListName)}/items`,
+        { method: 'POST', body: JSON.stringify({ fields: {
+            Title:      d.id,
+            DeviceName: d.name,
+            Category:   d.category,
+            SortOrder:  i
+          }})
+        }
+      );
+    }
+    toast('Default devices imported!', 'success');
+    await loadDevices();
+    render();
+    renderManage();
+  } catch (e) {
+    toast('Import error: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '📥 Import Default 14 Devices'; }
+  }
 }
 
 // ── Polling ───────────────────────────────────────────────────
@@ -933,10 +1244,16 @@ function shakeInput(id) {
   el.style.borderColor = 'var(--red)'; el.focus();
   setTimeout(() => el.style.borderColor = '', 1500);
 }
-function setBtnLoading(id, loading) {
+function setBtnLoading(id, loading, originalLabel) {
   const btn = document.getElementById(id);
-  btn.disabled    = loading;
-  btn.textContent = loading ? '…saving' : (id.includes('checkout') ? '✓ Confirm Checkout' : '✓ Confirm Check In');
+  btn.disabled = loading;
+  if (loading) {
+    btn._origLabel = btn.textContent;
+    btn.textContent = '…saving';
+  } else {
+    btn.textContent = originalLabel || btn._origLabel ||
+      (id.includes('checkout') ? '✓ Confirm Checkout' : '✓ Confirm Check In');
+  }
 }
 
 let toastTimer;
