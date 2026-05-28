@@ -837,7 +837,7 @@ async function refreshData() {
         const f = item.fields;
         return {
           id:         item.id,
-          deviceId:   f.DeviceKey  || '',
+          deviceId:   ALL_DEVICES.find(d => d.name === f.DeviceName)?.id || f.DeviceName || '',
           deviceName: f.DeviceName || '',
           category:   f.Category   || '',
           employee:   f.Employee   || '',
@@ -876,7 +876,9 @@ async function refreshData() {
       );
       availableItemIds = {};
       for (const item of (avRes.value || [])) {
-        availableItemIds[item.fields.DeviceKey || item.fields.Title] = item.id;
+        // Use device name as key (Title stores device name in AvailableDevices)
+        const devId = ALL_DEVICES.find(d => d.name === item.fields.Title)?.id || item.fields.Title;
+        availableItemIds[devId] = item.id;
       }
       // Sync the list to match current availability (best-effort)
       syncAvailableList().catch(e => console.warn('AvailableDevices sync failed:', e.message));
@@ -1626,7 +1628,6 @@ async function confirmReserve() {
       `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.reservationsListName)}/items`,
       { method: 'POST', body: JSON.stringify({ fields: {
           Title:      resId,
-          DeviceKey:  deviceId,
           DeviceName: d ? d.name : deviceId,
           Category:   d ? d.category : '',
           Employee:   name,
@@ -1715,7 +1716,6 @@ async function syncAvailableList() {
         `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.availableListName)}/items`,
         { method: 'POST', body: JSON.stringify({ fields: {
             Title:           d.name,
-            DeviceKey:       d.id,
             Category:        d.category,
             NextReservation: nextRes ? `${formatDate(nextRes.startDate)} — ${escHtml(nextRes.employee)}` : ''
           }})
