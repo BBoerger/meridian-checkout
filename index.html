@@ -394,6 +394,36 @@
     .icon-option:hover  { border-color: var(--brand-light); background: var(--bg); }
     .icon-option.selected { border-color: var(--brand); background: var(--bg); }
 
+    /* ── Maintenance ── */
+    .device-card.maintenance { border-color: #94a3b8; background: #f8fafc; opacity: .75; }
+    .device-card.maintenance .device-card-top { background: #f1f5f9; }
+    .status-pill.maintenance { background: #e2e8f0; color: #475569; }
+    .manage-device-status.maintenance { background: #e2e8f0; color: #475569; }
+    .btn-maintenance { background: #475569; color: #fff; }
+    .btn-maintenance:hover { background: #334155; }
+    .btn-online { background: var(--green); color: #fff; }
+    .btn-online:hover { background: #16a34a; }
+
+    /* ── Condition pills ── */
+    .cond-good    { background: #dcfce7; color: #16a34a; }
+    .cond-minor   { background: #fef3c7; color: #92400e; }
+    .cond-repair  { background: var(--red-bg); color: var(--red); }
+    .cond-pill    { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+
+    /* ── Analytics Tab ── */
+    .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 28px; }
+    .analytics-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 22px; }
+    .analytics-card h3 { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 14px; }
+    .analytics-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .analytics-label { font-size: 13px; font-weight: 600; min-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .analytics-bar-wrap { flex: 1; background: var(--bg); border-radius: 4px; height: 12px; overflow: hidden; }
+    .analytics-bar { height: 100%; border-radius: 4px; background: var(--brand); transition: width .4s ease; }
+    .analytics-bar.accent { background: var(--accent); }
+    .analytics-bar.green  { background: var(--green); }
+    .analytics-val { font-size: 12px; font-weight: 700; color: var(--muted); min-width: 36px; text-align: right; }
+    .analytics-empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+    .analytics-stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); gap: 12px; margin-bottom: 28px; }
+
     /* ── Responsive ── */
     @media (max-width: 600px) {
       main { padding: 16px; }
@@ -467,6 +497,7 @@
   <button onclick="showTab('reservations')">📅 Reservations</button>
   <button onclick="showTab('log')">📋 Checkout Log</button>
   <button onclick="showTab('manage')">⚙️ Manage Devices</button>
+  <button onclick="showTab('analytics')">📊 Analytics</button>
 </nav>
 
 <!-- ═══════════════ MAIN ═══════════════ -->
@@ -492,6 +523,10 @@
     <div id="manage-content"></div>
   </div>
 
+  <div id="tab-analytics" style="display:none;">
+    <div id="analytics-content"></div>
+  </div>
+
   <div id="tab-log" style="display:none;">
     <div class="log-toolbar">
       <input type="text" id="log-search" placeholder="🔍  Search employee or device…" style="flex:1;min-width:180px;" oninput="renderLog()">
@@ -511,6 +546,7 @@
             <th>Device</th>
             <th>Employee</th>
             <th>Project / Job Site</th>
+            <th>Condition</th>
           </tr>
         </thead>
         <tbody id="log-body"></tbody>
@@ -590,6 +626,20 @@
   <div class="modal">
     <h3>Check In Device</h3>
     <p class="confirm-msg" id="checkin-modal-msg"></p>
+    <div class="form-group">
+      <label>Device Condition <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <select id="checkin-condition" style="width:100%;padding:10px 13px;border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:var(--surface);">
+        <option value="">— Not specified —</option>
+        <option value="Good">✅ Good — No issues</option>
+        <option value="Minor Issue">⚠️ Minor Issue — Small problem noted</option>
+        <option value="Needs Repair">🔴 Needs Repair — Requires attention</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Condition Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <textarea id="checkin-notes" rows="2" placeholder="Any damage, issues, or notes about device condition…"
+        style="width:100%;padding:10px 13px;border:1px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);font-family:inherit;resize:vertical;"></textarea>
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('checkin-modal')">Cancel</button>
       <button class="btn-confirm green" id="checkin-confirm-btn" onclick="confirmCheckin()">✓ Confirm Check In</button>
@@ -861,13 +911,15 @@ async function refreshData() {
     logEntries = (logRes.value || []).map(item => {
       const f = item.fields;
       return {
-        ts:         item.createdDateTime ? new Date(item.createdDateTime).getTime() : 0,
-        event:      f.Title || '',
-        deviceName: f.DeviceName || '',
-        category:   f.Category   || '',
-        employee:   f.Employee   || '',
-        project:    f.Project    || '',
-        itemId:     item.id
+        ts:             item.createdDateTime ? new Date(item.createdDateTime).getTime() : 0,
+        event:          f.Title          || '',
+        deviceName:     f.DeviceName     || '',
+        category:       f.Category       || '',
+        employee:       f.Employee       || '',
+        project:        f.Project        || '',
+        condition:      f.Condition      || '',
+        conditionNotes: f.ConditionNotes || '',
+        itemId:         item.id
       };
     }).sort((a, b) => a.ts - b.ts);
 
@@ -932,7 +984,7 @@ async function doCheckout(deviceId, deviceName, category, employee, project, exp
   }
 }
 
-async function doCheckin(deviceId) {
+async function doCheckin(deviceId, condition, conditionNotes) {
   const co = checkouts[deviceId];
   if (!co) return;
   // Remove from DeviceCheckouts list (critical — must succeed)
@@ -942,15 +994,18 @@ async function doCheckin(deviceId) {
   );
   // Log the event (best-effort — don't block checkin if log fails)
   try {
+    const logFields = {
+      Title:      'in',
+      DeviceName: co.deviceName,
+      Category:   co.category,
+      Employee:   co.employee,
+      Project:    co.project
+    };
+    if (condition)      logFields.Condition      = condition;
+    if (conditionNotes) logFields.ConditionNotes = conditionNotes;
     await graph(`/sites/${siteId}/lists/${encodeURIComponent(CONFIG.logListName)}/items`, {
       method: 'POST',
-      body: JSON.stringify({ fields: {
-        Title:      'in',
-        DeviceName: co.deviceName,
-        Category:   co.category,
-        Employee:   co.employee,
-        Project:    co.project
-      }})
+      body: JSON.stringify({ fields: logFields })
     });
   } catch (logErr) {
     console.warn('CheckoutLog write failed (checkin still saved):', logErr.message);
@@ -979,13 +1034,16 @@ function render() {
   renderEquipment();
   if (document.getElementById('tab-manage').style.display       === 'block') renderManage();
   if (document.getElementById('tab-reservations').style.display === 'block') renderReservations();
+  if (document.getElementById('tab-analytics').style.display    === 'block') renderAnalytics();
 }
 
 function renderSummary() {
-  const total   = ALL_DEVICES.length;
-  const out     = Object.keys(checkouts).length;
+  const activeDevices = ALL_DEVICES.filter(d => d.status !== 'maintenance');
+  const maintenance = ALL_DEVICES.length - activeDevices.length;
+  const total   = activeDevices.length;
+  const out     = activeDevices.filter(d => checkouts[d.id]).length;
   const today   = todayISO();
-  const overdue = Object.values(checkouts).filter(co => co.expectedReturn && co.expectedReturn < today).length;
+  const overdue = activeDevices.filter(d => checkouts[d.id]?.expectedReturn && checkouts[d.id].expectedReturn < today).length;
   document.getElementById('summary-bar').innerHTML = `
     <div class="stat-card total">
       <span class="label">Total Devices</span>
@@ -1005,6 +1063,12 @@ function renderSummary() {
       <span class="value" style="color:var(--red)">${overdue}</span>
       <span class="sub">past return date</span>
     </div>` : ''}
+    ${maintenance > 0 ? `
+    <div class="stat-card" style="border-left:4px solid #94a3b8;background:#f8fafc;">
+      <span class="label" style="color:#475569">🔧 Maintenance</span>
+      <span class="value" style="color:#475569">${maintenance}</span>
+      <span class="sub">offline for service</span>
+    </div>` : ''}
     <div class="stat-card" style="border-left:4px solid var(--accent)">
       <span class="label">Log Entries</span>
       <span class="value" style="color:var(--accent)">${logEntries.length}</span>
@@ -1022,14 +1086,17 @@ function renderEquipment() {
       </div>`;
     return;
   }
-  // Group by category, preserving insertion order
+  // Group by category, preserving insertion order (exclude maintenance devices)
   const catMap = {};
   for (const d of ALL_DEVICES) {
+    if (d.status === 'maintenance') continue;
     if (!catMap[d.category]) catMap[d.category] = [];
     catMap[d.category].push(d);
   }
+  // Show maintenance devices at bottom
+  const maintDevices = ALL_DEVICES.filter(d => d.status === 'maintenance');
   document.getElementById('equipment-sections').innerHTML =
-    Object.entries(catMap).map(([catName, devices]) => {
+    [...Object.entries(catMap).map(([catName, devices]) => {
       const icon   = CATEGORY_ICONS[catName] || '📦';
       const today2 = todayISO();
       // Sort: overdue first, then other checked-out, then available
@@ -1052,7 +1119,30 @@ function renderEquipment() {
           </div>
           <div class="equipment-grid">${sorted.map(deviceCard).join('')}</div>
         </div>`;
-    }).join('');
+    }),
+    maintDevices.length > 0 ? [`
+        <div class="category-block">
+          <div class="section-header">
+            <h2><span>🔧</span>Under Maintenance</h2>
+            <span style="font-size:12px;color:var(--muted)">${maintDevices.length} device${maintDevices.length !== 1 ? 's' : ''} offline</span>
+          </div>
+          <div class="equipment-grid">${maintDevices.map(d => `
+            <div class="device-card maintenance">
+              <div class="device-card-top">
+                <div>
+                  <div class="device-name">${escHtml(d.name)}</div>
+                  <div class="device-type">${escHtml(d.category)}</div>
+                </div>
+                <span class="status-pill maintenance">Maintenance</span>
+              </div>
+              <div class="device-info" style="color:var(--muted)">🔧 This device is offline for service</div>
+              <div class="device-card-actions">
+                <button class="btn btn-online" onclick="toggleMaintenance('${d.inventoryItemId}', false)">✓ Bring Online</button>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>`] : []
+    ].flat().join('');
 }
 
 function deviceCard(d) {
@@ -1105,7 +1195,15 @@ function renderLog() {
     return true;
   });
   const tbody = document.getElementById('log-body');
-  tbody.innerHTML = rows.length ? rows.map(e => `
+  const condClass = { 'Good': 'cond-good', 'Minor Issue': 'cond-minor', 'Needs Repair': 'cond-repair' };
+  tbody.innerHTML = rows.length ? rows.map(e => {
+    const condPill = e.condition
+      ? `<span class="cond-pill ${condClass[e.condition] || ''}">${escHtml(e.condition)}</span>`
+      : '';
+    const notesTip = e.conditionNotes
+      ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escHtml(e.conditionNotes)}</div>`
+      : '';
+    return `
     <tr>
       <td>${formatDateTime(e.ts)}</td>
       <td><span class="log-event ${e.event}">${e.event === 'out' ? '↗ Checked Out' : '↩ Checked In'}</span></td>
@@ -1113,12 +1211,19 @@ function renderLog() {
           <span style="color:var(--muted);font-size:11px">${escHtml(e.category)}</span></td>
       <td>${escHtml(e.employee)}</td>
       <td>${escHtml(e.project || '—')}</td>
-    </tr>`).join('')
-    : `<tr><td colspan="5" class="empty-state">No log entries found.</td></tr>`;
+      <td>${condPill}${notesTip}</td>
+    </tr>`;
+  }).join('')
+    : `<tr><td colspan="6" class="empty-state">No log entries found.</td></tr>`;
 }
 
 // ── Modal Actions ─────────────────────────────────────────────
 function openCheckout(deviceId) {
+  const deviceObj = ALL_DEVICES.find(x => x.id === deviceId);
+  if (deviceObj?.status === 'maintenance') {
+    toast(`${deviceObj.name} is currently offline for maintenance`, 'error');
+    return;
+  }
   // Block if device has an active reservation today
   const today = todayISO();
   const activeRes = reservations.find(r =>
@@ -1184,16 +1289,20 @@ function openCheckin(deviceId) {
   document.getElementById('checkin-modal-msg').innerHTML =
     `Return <strong>${escHtml(d.name)}</strong> from <strong>${escHtml(co.employee)}</strong>?<br>
      <span style="color:var(--muted);font-size:12px">Project: ${escHtml(co.project)}</span>`;
+  document.getElementById('checkin-condition').value = '';
+  document.getElementById('checkin-notes').value     = '';
   openModal('checkin-modal');
 }
 
 async function confirmCheckin() {
   if (isSaving) return;
   const d = ALL_DEVICES.find(x => x.id === activeDeviceId);
+  const condition      = document.getElementById('checkin-condition').value;
+  const conditionNotes = document.getElementById('checkin-notes').value.trim();
   setBtnLoading('checkin-confirm-btn', true);
   isSaving = true;
   try {
-    await doCheckin(activeDeviceId);
+    await doCheckin(activeDeviceId, condition, conditionNotes);
     closeModal('checkin-modal');
     toast(`${d.name} checked back in`, 'success');
     await refreshData();
@@ -1225,7 +1334,7 @@ document.querySelectorAll('.modal-overlay').forEach(el =>
 );
 
 // ── Tab ───────────────────────────────────────────────────────
-const TABS = ['inventory','reservations','log','manage'];
+const TABS = ['inventory','reservations','log','manage','analytics'];
 function showTab(tab) {
   TABS.forEach(t => {
     document.getElementById(`tab-${t}`).style.display = tab === t ? 'block' : 'none';
@@ -1237,6 +1346,7 @@ function showTab(tab) {
   if (tab === 'available')    renderAvailable();
   if (tab === 'reservations') renderReservations();
   if (tab === 'manage')       renderManage();
+  if (tab === 'analytics')    renderAnalytics();
   // Update URL hash so Teams tab can link directly to a tab
   history.replaceState(null, '', '#' + tab);
 }
@@ -1252,6 +1362,7 @@ async function loadDevices() {
       name:            item.fields.DeviceName || '',
       category:        item.fields.Category   || '',
       sortOrder:       item.fields.SortOrder  || 0,
+      status:          item.fields.Status     || 'active',
       inventoryItemId: item.id
     })).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   } catch (e) {
@@ -1289,14 +1400,22 @@ function renderManage() {
         <div class="manage-device-list">
           ${devices.map(d => {
             const isOut = !!checkouts[d.id];
+            const isMaint = d.status === 'maintenance';
+            let statusLabel, statusClass;
+            if (isMaint)        { statusLabel = '🔧 Maintenance'; statusClass = 'maintenance'; }
+            else if (isOut)     { statusLabel = 'Checked Out';    statusClass = 'out'; }
+            else                { statusLabel = 'Available';       statusClass = 'available'; }
             return `
-              <div class="manage-device-row">
+              <div class="manage-device-row" style="${isMaint ? 'opacity:.7;background:#f8fafc;' : ''}">
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span class="manage-device-name">${escHtml(d.name)}</span>
-                  <span class="manage-device-status ${isOut ? 'out' : 'available'}">${isOut ? 'Checked Out' : 'Available'}</span>
+                  <span class="manage-device-status ${statusClass}">${statusLabel}</span>
                 </div>
                 <div class="manage-device-actions">
                   <button class="btn-sm" onclick="openEditDevice('${d.inventoryItemId}')">✏ Edit</button>
+                  ${isMaint
+                    ? `<button class="btn-sm btn-online" onclick="toggleMaintenance('${d.inventoryItemId}', false)">✓ Bring Online</button>`
+                    : `<button class="btn-sm btn-maintenance" onclick="toggleMaintenance('${d.inventoryItemId}', true)" ${isOut ? 'disabled title="Check in device first"' : ''}>🔧 Take Offline</button>`}
                   <button class="btn-sm btn-danger-sm" onclick="confirmDeleteDevice('${d.inventoryItemId}')">🗑 Delete</button>
                 </div>
               </div>`;
@@ -1410,6 +1529,27 @@ async function deleteDevice() {
   }
 }
 
+async function toggleMaintenance(inventoryItemId, goOffline) {
+  const d = ALL_DEVICES.find(x => x.inventoryItemId === inventoryItemId);
+  if (!d) return;
+  if (goOffline && checkouts[d.id]) {
+    toast(`${d.name} is currently checked out — check it in before taking it offline`, 'error');
+    return;
+  }
+  try {
+    await graph(
+      `/sites/${siteId}/lists/${encodeURIComponent(CONFIG.deviceInventoryListName)}/items/${inventoryItemId}`,
+      { method: 'PATCH', body: JSON.stringify({ fields: { Status: goOffline ? 'maintenance' : 'active' } }) }
+    );
+    toast(`${d.name} ${goOffline ? 'taken offline for maintenance' : 'brought back online'}`, 'success');
+    await loadDevices();
+    render();
+    renderManage();
+  } catch (e) {
+    toast('Error updating device status: ' + e.message, 'error');
+  }
+}
+
 async function seedDefaultDevices() {
   const btn = document.getElementById('seed-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
@@ -1435,6 +1575,163 @@ async function seedDefaultDevices() {
     toast('Import error: ' + e.message, 'error');
     if (btn) { btn.disabled = false; btn.textContent = '📥 Import Default 14 Devices'; }
   }
+}
+
+// ── Analytics Tab ─────────────────────────────────────────────
+function renderAnalytics() {
+  const el = document.getElementById('analytics-content');
+  if (logEntries.length === 0) {
+    el.innerHTML = `<div class="analytics-empty"><div style="font-size:48px;margin-bottom:12px">📊</div><p>No checkout history yet. Analytics will appear here once devices have been checked out and returned.</p></div>`;
+    return;
+  }
+
+  // ── 1. Checkout counts per device ──
+  const checkoutCounts = {};
+  for (const e of logEntries) {
+    if (e.event !== 'out') continue;
+    checkoutCounts[e.deviceName] = (checkoutCounts[e.deviceName] || 0) + 1;
+  }
+  const topDevices = Object.entries(checkoutCounts)
+    .sort((a,b) => b[1] - a[1]).slice(0, 8);
+  const maxCount = topDevices[0]?.[1] || 1;
+
+  // ── 2. Average checkout duration per device (pair out→in by deviceName) ──
+  const durations = {}; // deviceName → [hours]
+  const outEvents = {};  // deviceName → [timestamp]
+  for (const e of logEntries) {
+    if (e.event === 'out') {
+      if (!outEvents[e.deviceName]) outEvents[e.deviceName] = [];
+      outEvents[e.deviceName].push(e.ts);
+    } else if (e.event === 'in') {
+      const outs = outEvents[e.deviceName];
+      if (outs && outs.length > 0) {
+        const outTs = outs.shift();
+        const hrs = (e.ts - outTs) / 3600000;
+        if (hrs > 0 && hrs < 8760) { // 0–1 year sanity check
+          if (!durations[e.deviceName]) durations[e.deviceName] = [];
+          durations[e.deviceName].push(hrs);
+        }
+      }
+    }
+  }
+  const avgDurations = Object.entries(durations).map(([name, hrs]) => ({
+    name, avg: hrs.reduce((s,h) => s+h, 0) / hrs.length
+  })).sort((a,b) => b.avg - a.avg).slice(0, 8);
+  const maxAvg = avgDurations[0]?.avg || 1;
+
+  // ── 3. Busiest months ──
+  const monthCounts = {};
+  for (const e of logEntries) {
+    if (e.event !== 'out') continue;
+    const d = new Date(e.ts);
+    const key = d.toLocaleDateString('en-US', { month:'short', year:'numeric' });
+    monthCounts[key] = (monthCounts[key] || 0) + 1;
+  }
+  const topMonths = Object.entries(monthCounts).slice(-12).sort((a,b) => b[1]-a[1]).slice(0,8);
+  const maxMonth = topMonths[0]?.[1] || 1;
+
+  // ── 4. Top employees ──
+  const empCounts = {};
+  for (const e of logEntries) {
+    if (e.event !== 'out') continue;
+    empCounts[e.employee] = (empCounts[e.employee] || 0) + 1;
+  }
+  const topEmps = Object.entries(empCounts).sort((a,b) => b[1]-a[1]).slice(0, 8);
+  const maxEmp = topEmps[0]?.[1] || 1;
+
+  // ── 5. Condition breakdown ──
+  const condCounts = { 'Good': 0, 'Minor Issue': 0, 'Needs Repair': 0 };
+  let totalConditioned = 0;
+  for (const e of logEntries) {
+    if (e.event === 'in' && e.condition) {
+      condCounts[e.condition] = (condCounts[e.condition] || 0) + 1;
+      totalConditioned++;
+    }
+  }
+
+  function bar(pct, cls='') {
+    return `<div class="analytics-bar-wrap"><div class="analytics-bar ${cls}" style="width:${Math.max(2,pct)}%"></div></div>`;
+  }
+  function fmtDur(hrs) {
+    if (hrs < 24) return `${hrs.toFixed(1)}h`;
+    return `${(hrs/24).toFixed(1)}d`;
+  }
+
+  el.innerHTML = `
+    <div style="margin-bottom:10px">
+      <h2 style="font-size:20px;font-weight:800;color:var(--brand);margin-bottom:4px">Usage Analytics</h2>
+      <p style="font-size:13px;color:var(--muted)">Based on ${logEntries.filter(e=>e.event==='out').length} checkouts · ${logEntries.filter(e=>e.event==='in').length} check-ins</p>
+    </div>
+
+    <div class="analytics-grid">
+
+      <!-- Most-used devices -->
+      <div class="analytics-card">
+        <h3>📦 Most-Used Devices</h3>
+        ${topDevices.length ? topDevices.map(([name, cnt]) => `
+          <div class="analytics-row">
+            <span class="analytics-label" title="${escHtml(name)}">${escHtml(name)}</span>
+            ${bar(cnt/maxCount*100)}
+            <span class="analytics-val">${cnt}</span>
+          </div>`).join('') : '<p style="color:var(--muted);font-size:13px">No data yet</p>'}
+      </div>
+
+      <!-- Avg checkout duration -->
+      <div class="analytics-card">
+        <h3>⏱ Avg Checkout Duration</h3>
+        ${avgDurations.length ? avgDurations.map(({name, avg}) => `
+          <div class="analytics-row">
+            <span class="analytics-label" title="${escHtml(name)}">${escHtml(name)}</span>
+            ${bar(avg/maxAvg*100, 'accent')}
+            <span class="analytics-val">${fmtDur(avg)}</span>
+          </div>`).join('') : '<p style="color:var(--muted);font-size:13px">Check-ins needed to compute duration</p>'}
+      </div>
+
+      <!-- Busiest months -->
+      <div class="analytics-card">
+        <h3>📅 Busiest Months</h3>
+        ${topMonths.length ? topMonths.map(([month, cnt]) => `
+          <div class="analytics-row">
+            <span class="analytics-label">${escHtml(month)}</span>
+            ${bar(cnt/maxMonth*100, 'green')}
+            <span class="analytics-val">${cnt}</span>
+          </div>`).join('') : '<p style="color:var(--muted);font-size:13px">No data yet</p>'}
+      </div>
+
+      <!-- Top employees -->
+      <div class="analytics-card">
+        <h3>👤 Top Employees</h3>
+        ${topEmps.length ? topEmps.map(([emp, cnt]) => `
+          <div class="analytics-row">
+            <span class="analytics-label" title="${escHtml(emp)}">${escHtml(emp)}</span>
+            ${bar(cnt/maxEmp*100)}
+            <span class="analytics-val">${cnt}</span>
+          </div>`).join('') : '<p style="color:var(--muted);font-size:13px">No data yet</p>'}
+      </div>
+
+      ${totalConditioned > 0 ? `
+      <!-- Condition breakdown -->
+      <div class="analytics-card">
+        <h3>🔍 Return Conditions</h3>
+        <div class="analytics-row">
+          <span class="analytics-label">✅ Good</span>
+          ${bar(condCounts['Good']/totalConditioned*100, 'green')}
+          <span class="analytics-val">${condCounts['Good']}</span>
+        </div>
+        <div class="analytics-row">
+          <span class="analytics-label">⚠️ Minor Issue</span>
+          ${bar(condCounts['Minor Issue']/totalConditioned*100, 'accent')}
+          <span class="analytics-val">${condCounts['Minor Issue']}</span>
+        </div>
+        <div class="analytics-row">
+          <span class="analytics-label">🔴 Needs Repair</span>
+          ${bar(condCounts['Needs Repair']/totalConditioned*100)}
+          <span class="analytics-val">${condCounts['Needs Repair']}</span>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:10px">${totalConditioned} of ${logEntries.filter(e=>e.event==='in').length} check-ins have condition data</p>
+      </div>` : ''}
+
+    </div>`;
 }
 
 // ── Available Now Tab ─────────────────────────────────────────
