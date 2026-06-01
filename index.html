@@ -104,6 +104,40 @@
       display: flex; align-items: center; justify-content: center;
     }
 
+    /* ── App Switcher ── */
+    .app-switcher { position: relative; }
+    .apps-btn {
+      background: rgba(255,255,255,.12); border: none; border-radius: 8px;
+      color: #fff; padding: 6px 12px; font-size: 13px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: background .15s;
+    }
+    .apps-btn:hover { background: rgba(255,255,255,.22); }
+    .apps-dropdown {
+      display: none; position: absolute; top: calc(100% + 10px); right: 0;
+      background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.22);
+      min-width: 240px; overflow: hidden; z-index: 300;
+      animation: pop .15s ease;
+    }
+    .apps-dropdown.open { display: block; }
+    .apps-dropdown-header {
+      padding: 10px 16px; font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .7px; color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    .app-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 16px; text-decoration: none; color: var(--text);
+      transition: background .12s;
+    }
+    .app-item:hover { background: var(--bg); }
+    .app-item-icon {
+      width: 36px; height: 36px; background: var(--accent); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 900; color: var(--brand); flex-shrink: 0;
+    }
+    .app-item-name { font-size: 13px; font-weight: 700; line-height: 1.2; }
+    .app-item-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
     /* ── Refresh bar ── */
     #refresh-bar {
       background: #e8f4fd; border-bottom: 1px solid #bee3f8;
@@ -470,13 +504,43 @@
     <div class="logo-icon">M</div>
     <div>
       <h1>Meridian Management</h1>
-      <p>Device Checkout System</p>
+      <p>Device Checkout</p>
     </div>
   </div>
   <div class="header-right">
     <div class="header-meta">
       <div id="live-clock"></div>
       <div id="header-date"></div>
+    </div>
+    <!-- App Switcher -->
+    <div class="app-switcher" id="app-switcher">
+      <button class="apps-btn" onclick="toggleAppsDropdown(event)" title="Switch app">
+        ⊞ Apps
+      </button>
+      <div class="apps-dropdown" id="apps-dropdown">
+        <div class="apps-dropdown-header">Meridian Tools</div>
+        <a class="app-item" href="https://meridianak.github.io/receipt-tracker/" target="_blank" rel="noopener">
+          <div class="app-item-icon">M</div>
+          <div>
+            <div class="app-item-name">Receipt Tracker</div>
+            <div class="app-item-sub">Capture &amp; organize receipts</div>
+          </div>
+        </a>
+        <a class="app-item" href="https://meridianak.github.io/expense-tracker/" target="_blank" rel="noopener">
+          <div class="app-item-icon">M</div>
+          <div>
+            <div class="app-item-name">Expense Tracker</div>
+            <div class="app-item-sub">Track project expenses</div>
+          </div>
+        </a>
+        <a class="app-item" href="https://meridianak.github.io/meridian-checkout/" target="_blank" rel="noopener">
+          <div class="app-item-icon">M</div>
+          <div>
+            <div class="app-item-name">Device Checkout</div>
+            <div class="app-item-sub" style="color:var(--green);font-weight:700">● Current app</div>
+          </div>
+        </a>
+      </div>
     </div>
     <button class="user-chip" onclick="signOut()" title="Click to sign out">
       <div class="user-avatar" id="user-avatar">?</div>
@@ -2121,6 +2185,18 @@ function setBtnLoading(id, loading, originalLabel) {
       (id.includes('checkout') ? '✓ Confirm Checkout' : '✓ Confirm Check In');
   }
 }
+
+// ── App Switcher ──────────────────────────────────────────────
+function toggleAppsDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('apps-dropdown').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const switcher = document.getElementById('app-switcher');
+  if (switcher && !switcher.contains(e.target)) {
+    document.getElementById('apps-dropdown').classList.remove('open');
+  }
+});
 
 let toastTimer;
 function toast(msg, type = '') {
